@@ -30,7 +30,7 @@ typeSpec
     ;
 
 varDecl
-    : 'var' IDENTIFIER typeSpec? ('=' expression)? ';'
+    : 'int' IDENTIFIER typeSpec? ('=' expression)? ';' // used to have var here
     ;
 
 spawnStmt

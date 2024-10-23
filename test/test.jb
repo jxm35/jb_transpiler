@@ -1,8 +1,9 @@
-func main() {
-    var x = 42;
-    print(x);
-}
-
-func print(n int) {
+func myPrint(n int) {
     printf("The number is: %d\n", n);
 }
+
+func main() int {
+    int x = 42;
+    myPrint(x);
+}
+
