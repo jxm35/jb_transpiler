@@ -1,12 +1,15 @@
 #include "runtime.h"
 #include <stdio.h>
+#include <stdbool.h>
 
-void myPrint( n) {
-printf("The number is: %d\n", n);
+int add(int a, int b){
+return a + b;
 }
 
-void main() {
-int x = 42;
-myPrint(x);
+int main(){
+int x = 5;
+int y = 10;
+int z = add(x, y);
+printf("Result: %d\n", z);
 }
 

@@ -5,6 +5,9 @@ project(JBLangTranspiler)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Add to CMakeLists.txt before project()
+set(CMAKE_OSX_ARCHITECTURES "arm64")
+
 # Find Java (needed for ANTLR)
 find_package(Java COMPONENTS Runtime REQUIRED)
 
@@ -66,7 +69,7 @@ target_link_libraries(JBLangParser
 add_executable(transpiler
         src/main.cpp
         src/TranspilerVisitor.cpp
-        )
+        src/runtime/runtime.c)
 
 target_link_libraries(transpiler
         PRIVATE

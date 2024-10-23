@@ -17,8 +17,10 @@ cmake --build .
 if [ -f "../test/test.jb" ]; then
     echo "Running test file..."
     ./transpiler ../test/test.jb > ../output.c
-    cat output.c
     cd ..
+    echo "----------   Generated Code   ----------"
+    cat output.c
+    echo "----------   Generated Code   ----------"
     gcc output.c -o test_program
     ./test_program
 fi

@@ -1,9 +1,10 @@
-func myPrint(n int) {
-    printf("The number is: %d\n", n);
+int add(int a, int b) {
+    return a + b;
 }
 
-func main() int {
-    int x = 42;
-    myPrint(x);
+int main() {
+    int x = 5;
+    int y = 10;
+    int z = add(x, y);
+    printf("Result: %d\n", z)
 }
-
