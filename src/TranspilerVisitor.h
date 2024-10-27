@@ -17,25 +17,49 @@ public:
         Bool,
         Struct
     };
-
+    struct ArrayInfo {
+        bool isArray = false;
+        int size = 0;     // 0 means size not specified
+        std::string name;
+    };
     // Default constructor
-    Type() : m_baseType(BaseType::Void), m_isPointer(false), m_isConst(false) {}
+    Type() : m_baseType(BaseType::Void), m_isPointer(false), m_isConst(false), m_isStruct(false){}
 
     // Main constructors
-    explicit Type(BaseType base) : m_baseType(base), m_isPointer(false), m_isConst(false) {}
-    Type(BaseType base, bool isPointer, bool isConst = false)
-            : m_baseType(base), m_isPointer(isPointer), m_isConst(isConst) {}
+    explicit Type(BaseType base) : m_baseType(base), m_isPointer(false), m_isConst(false), m_isStruct(false) {}
 
+    Type(BaseType base, bool isPointer, bool isConst = false, bool isStruct = false)
+            : m_baseType(base), m_isPointer(isPointer), m_isConst(isConst), m_isStruct(isStruct) {}
     bool isPointer() const { return m_isPointer; }
+
     bool isConst() const { return m_isConst; }
     BaseType getBaseType() const { return m_baseType; }
     std::string toString() const;
+    void setPointer(bool isPtr) { m_isPointer = true; }
+    bool isArray() const { return m_arrayInfo.isArray; }
+    int getArraySize() const { return m_arrayInfo.size; }
+    std::string getStructName() const {return m_structName;}
+
+    void setArray(std::string arrayName, int size = 0) {
+        m_arrayInfo.isArray = true;
+        m_arrayInfo.size = size;
+        m_arrayInfo.name = arrayName;
+    }
+
+    void setStruct(const std::string& name) {
+        m_isStruct = true;
+        m_structName = name;
+    }
 
 private:
+    ArrayInfo m_arrayInfo;
     BaseType m_baseType;
     bool m_isPointer;
     bool m_isConst;
+    bool m_isStruct;
+    std::string m_structName;
 };
+
 
 // Represents a function declaration
 class Function {
@@ -61,18 +85,27 @@ public:
     // Main entry point
     virtual antlrcpp::Any visitProgram(JBLangParser::ProgramContext *ctx) override;
 
+    // Preprocessor
+    virtual antlrcpp::Any visitPreprocessorDirective(JBLangParser::PreprocessorDirectiveContext *ctx) override;
+
     // Declarations
     virtual antlrcpp::Any visitFunctionDecl(JBLangParser::FunctionDeclContext *ctx) override;
     virtual antlrcpp::Any visitVarDecl(JBLangParser::VarDeclContext *ctx) override;
+    virtual antlrcpp::Any visitStructDecl(JBLangParser::StructDeclContext *ctx) override;
+    virtual antlrcpp::Any visitTypedefDecl(JBLangParser::TypedefDeclContext *ctx) override;
+    virtual antlrcpp::Any visitArrayDecl(JBLangParser::ArrayDeclContext *ctx) override;
 
     // Statements
     virtual antlrcpp::Any visitBlock(JBLangParser::BlockContext *ctx) override;
+
     virtual antlrcpp::Any visitSpawnStmt(JBLangParser::SpawnStmtContext *ctx) override;
     virtual antlrcpp::Any visitReturnStmt(JBLangParser::ReturnStmtContext *ctx) override;
     virtual antlrcpp::Any visitExprStmt(JBLangParser::ExprStmtContext *ctx) override;
-
+    virtual antlrcpp::Any visitIfStmt(JBLangParser::IfStmtContext *ctx) override;
+    virtual antlrcpp::Any visitWhileStmt(JBLangParser::WhileStmtContext *ctx) override;
     // Expressions
     virtual antlrcpp::Any visitPrimary(JBLangParser::PrimaryContext *ctx) override;
+
     virtual antlrcpp::Any visitLiteralExpr(JBLangParser::LiteralExprContext *ctx) override;
     virtual antlrcpp::Any visitMemberExpr(JBLangParser::MemberExprContext *ctx) override;
     virtual antlrcpp::Any visitFuncCallExpr(JBLangParser::FuncCallExprContext *ctx) override;
@@ -80,13 +113,17 @@ public:
     virtual antlrcpp::Any visitAddSubExpr(JBLangParser::AddSubExprContext *ctx) override;
     virtual antlrcpp::Any visitCompareExpr(JBLangParser::CompareExprContext *ctx) override;
     virtual antlrcpp::Any visitAssignExpr(JBLangParser::AssignExprContext *ctx) override;
-
+    virtual antlrcpp::Any visitPointerMemberExpr(JBLangParser::PointerMemberExprContext *ctx) override;
+    virtual antlrcpp::Any visitAddressOfExpr(JBLangParser::AddressOfExprContext *ctx) override;
+    virtual antlrcpp::Any visitDereferenceExpr(JBLangParser::DereferenceExprContext *ctx) override;
+    virtual antlrcpp::Any visitArrayAccessExpr(JBLangParser::ArrayAccessExprContext *ctx) override;
     // Helpers
     virtual antlrcpp::Any visitLiteral(JBLangParser::LiteralContext *ctx) override;
     virtual antlrcpp::Any visitFunctionCall(JBLangParser::FunctionCallContext *ctx) override;
 
     // Get the generated code
     std::string getOutput() const { return m_output.str(); }
+    std::stringstream& getOutputStream() {return m_output; }
 
 private:
     void generateSpawnWrapper(const std::string& wrapperName,
@@ -115,4 +152,6 @@ private:
     std::shared_ptr<Scope> m_currentScope;
     int m_tempVarCounter;
     bool m_isInGlobalScope;
+    std::map<std::string, std::string> m_defines;  // For #define directives
+    std::map<std::string, Type> m_typedefs;        // For typedef declarations
 };

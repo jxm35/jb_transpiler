@@ -57,6 +57,7 @@ add_library(JBLangParser
 target_include_directories(JBLangParser
         PUBLIC
         ${CMAKE_BINARY_DIR}
+        build
         ${ANTLR4_INCLUDE_DIR}
         )
 

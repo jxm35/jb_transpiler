@@ -1,8 +1,14 @@
 grammar JBLang;
 
 program
-    : statement* EOF
+    : preprocessorDirective* statement* EOF
     ;
+
+preprocessorDirective
+    : '#include' (STRING | INCLUDE_STRING )
+    | '#define' IDENTIFIER (INTEGER | STRING)?
+    ;
+
 
 statement
     : functionDecl
@@ -11,6 +17,14 @@ statement
     | returnStmt
     | exprStmt
     | block
+    | structDecl
+    | ifStmt
+    | whileStmt
+    | typedefDecl    // Add this
+    ;
+
+typedefDecl
+    : 'typedef' (typeSpec | structDecl) IDENTIFIER ';'
     ;
 
 functionDecl
@@ -22,18 +36,32 @@ paramList
     ;
 
 param
-    : typeSpec IDENTIFIER  // C-style: type before parameter name
+    : ((typeSpec IDENTIFIER) | arrayDecl)  // C-style: type before parameter name
     ;
 
 typeSpec
     : 'void'
     | 'int'
-    | 'string'
     | 'bool'
+    | 'string'
+    | 'struct'? IDENTIFIER        // For struct types
+    | typeSpec '*'
+    ;
+
+arrayDecl : typeSpec  IDENTIFIER arraySize arraySize* ;
+
+arraySize : (OPEN_BRACKET (INTEGER | IDENTIFIER) CLOSE_BRACKET) ;
+
+structDecl
+    : 'struct' IDENTIFIER '{' structMember* '}' ';'?
+    ;
+
+structMember
+    : ((typeSpec IDENTIFIER) | arrayDecl) ';'
     ;
 
 varDecl
-    : typeSpec IDENTIFIER ('=' expression)? ';'  // C-style: type before variable name
+    : ((typeSpec IDENTIFIER) | arrayDecl) ('=' expression)? ';'  // C-style: type before variable name
     ;
 
 spawnStmt
@@ -46,6 +74,14 @@ returnStmt
 
 exprStmt
     : expression ';'
+    ;
+
+ifStmt
+    : 'if' '(' expression ')' statement ('else' statement)?
+    ;
+
+whileStmt
+    : 'while' '(' expression ')' statement
     ;
 
 block
@@ -62,6 +98,10 @@ expression
     | expression '=' expression                     # AssignExpr
     | IDENTIFIER                                    # VarExpr
     | literal                                       # LiteralExpr
+    | expression '->' IDENTIFIER                    # PointerMemberExpr
+    | '&' expression                               # AddressOfExpr
+    | '*' expression                               # DereferenceExpr
+    | expression '[' expression ']'                 # ArrayAccessExpr
     ;
 
 functionCall
@@ -85,8 +125,11 @@ literal
     | 'false'
     ;
 
+OPEN_BRACKET : '[' ;
+CLOSE_BRACKET : ']' ;
 INTEGER : [0-9]+ ;
 STRING  : '"' (~["])* '"' ;
+INCLUDE_STRING  : '<' (~["])* '>' '\n' ;
 IDENTIFIER : [a-zA-Z_][a-zA-Z0-9_]* ;
 WS : [ \t\r\n]+ -> skip ;
 COMMENT : '//' ~[\r\n]* -> skip ;

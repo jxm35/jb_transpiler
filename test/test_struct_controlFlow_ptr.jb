@@ -1,0 +1,28 @@
+#include <stdio.h>
+
+typedef struct Point {
+    int x;
+    int y;
+} Point;
+
+int main() {
+    Point p;
+    Point* pp = &p;
+
+    p.x = 10;
+    pp->y = 20;
+
+    int* ip = &p.x;
+    *ip = 30;
+
+    if (p.x > 20) {
+        // do something
+    } else {
+        // do something else
+    }
+
+    while (p.x > 0) {
+        printf("P.x = %d\n", p.x)
+        p.x = p.x - 7;
+    }
+}
