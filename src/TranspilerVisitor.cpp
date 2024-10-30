@@ -27,6 +27,8 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext *ctx)
         m_output << "\n";
     }
 
+    m_output << "int main() {\n    runtime_init();\n    main_();\n    runtime_print_stats();\n}\n";
+
     return m_output.str();
 }
 
@@ -49,7 +51,7 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
                 paramType = translateType(param->typeSpec()->getText());
                 paramName = param->IDENTIFIER()->getText();
             }
-            func->params.push_back({paramName, paramType});
+            func->params.emplace_back(paramName, paramType);
         }
     }
 
@@ -124,7 +126,7 @@ antlrcpp::Any TranspilerVisitor::visitBlock(JBLangParser::BlockContext *ctx) {
         visit(stmt);
     }
 
-//    this->m_output << "runtime_block_end();\n";
+    this->m_output << "runtime_scope_end();\n";
     m_output << "}\n";
 
     popScope();
@@ -403,6 +405,10 @@ antlrcpp::Any TranspilerVisitor::visitArrayAccessExpr(JBLangParser::ArrayAccessE
     return array + "[" + index + "]";
 }
 
+antlrcpp::Any TranspilerVisitor::visitNewExpr(JBLangParser::NewExprContext *ctx) {
+    return "runtime_alloc(sizeof(" + ctx->typeSpec()->getText() + "))";
+}
+
 antlrcpp::Any TranspilerVisitor::visitArrayDecl(JBLangParser::ArrayDeclContext *ctx) {
     Type memberType = translateType(ctx->typeSpec()->getText());
     m_output << "    " << memberType.toString() << " "
@@ -468,7 +474,11 @@ std::string Type::toString() const {
 
 
 std::string Function::getSignature() const {
-    std::string signature =  this->returnType.toString() + " " + this->name + "(";
+    std::string name = this->name;
+    if (name == "main") {
+        name = "main_";
+    }
+    std::string signature =  this->returnType.toString() + " " + name + "(";
     bool first = true;
     for (const std::pair<std::string, Type>& paramPair : this->params) {
         if (!first) {

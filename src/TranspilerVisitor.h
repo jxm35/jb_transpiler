@@ -117,6 +117,8 @@ public:
     virtual antlrcpp::Any visitAddressOfExpr(JBLangParser::AddressOfExprContext *ctx) override;
     virtual antlrcpp::Any visitDereferenceExpr(JBLangParser::DereferenceExprContext *ctx) override;
     virtual antlrcpp::Any visitArrayAccessExpr(JBLangParser::ArrayAccessExprContext *ctx) override;
+    virtual antlrcpp::Any visitNewExpr(JBLangParser::NewExprContext *ctx) override;
+
     // Helpers
     virtual antlrcpp::Any visitLiteral(JBLangParser::LiteralContext *ctx) override;
     virtual antlrcpp::Any visitFunctionCall(JBLangParser::FunctionCallContext *ctx) override;

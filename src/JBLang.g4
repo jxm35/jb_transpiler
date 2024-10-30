@@ -98,6 +98,7 @@ expression
     | expression '=' expression                     # AssignExpr
     | IDENTIFIER                                    # VarExpr
     | literal                                       # LiteralExpr
+    | 'new' typeSpec                                # NewExpr
     | expression '->' IDENTIFIER                    # PointerMemberExpr
     | '&' expression                               # AddressOfExpr
     | '*' expression                               # DereferenceExpr

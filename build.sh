@@ -16,11 +16,11 @@ cmake --build .
 # Run a test if provided
 if [ -f "../test/test.jb" ]; then
     echo "Running test file..."
-    ./transpiler ../test/test.jb > ../output.c
+    ./transpiler ../test/test.jb -o ../output
     cd ..
     echo "----------   Generated Code   ----------"
     cat output.c
     echo "----------   Generated Code   ----------"
-    gcc output.c -o test_program
-    ./test_program
+#    gcc output.c -o test_program
+    ./output
 fi

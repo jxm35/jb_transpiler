@@ -69,8 +69,7 @@ target_link_libraries(JBLangParser
 # Add the main executable
 add_executable(transpiler
         src/main.cpp
-        src/TranspilerVisitor.cpp
-        src/runtime/runtime.c)
+        src/TranspilerVisitor.cpp)
 
 target_link_libraries(transpiler
         PRIVATE
