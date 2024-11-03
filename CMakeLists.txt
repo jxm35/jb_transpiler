@@ -69,7 +69,7 @@ target_link_libraries(JBLangParser
 # Add the main executable
 add_executable(transpiler
         src/main.cpp
-        src/TranspilerVisitor.cpp)
+        src/TranspilerVisitor.cpp src/CCodeGenerator.cpp src/CodeGenerator.h src/SymbolTable.h src/TypeSystem.cpp src/TypeSystem.h src/CompilerError.cpp src/CompilerError.h src/SymbolTable.cpp src/SymbolTable.h src/CCodeGenerator.h)
 
 target_link_libraries(transpiler
         PRIVATE

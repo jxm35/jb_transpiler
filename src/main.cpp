@@ -3,6 +3,7 @@
 #include "JBLangLexer.h"
 #include "JBLangParser.h"
 #include "TranspilerVisitor.h"
+#include "CCodeGenerator.h"
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -45,7 +46,6 @@ void printUsage(const char* programName) {
 }
 
 int main(int argc, char* argv[]) {
-    // Check command line arguments
     if (argc != 4 || std::string(argv[2]) != "-o") {
         printUsage(argv[0]);
         return 1;
@@ -57,17 +57,15 @@ int main(int argc, char* argv[]) {
     std::string executablePath = outputName;
 
     try {
-        // Check if input file exists
         if (!fileExists(inputFile)) {
             throw std::runtime_error("Input file does not exist: " + inputFile);
         }
 
-        // Check if runtime files exist
         if (!fileExists("../src/runtime/runtime.h") || !fileExists("../src/runtime/runtime.c")) {
             throw std::runtime_error("Runtime files not found in ./runtime directory");
         }
 
-        // Setup ANTLR input
+        // Setup ANTLR
         std::ifstream stream;
         stream.open(inputFile);
         antlr4::ANTLRInputStream input(stream);
@@ -79,10 +77,10 @@ int main(int argc, char* argv[]) {
 
         // Parse and visit
         auto* tree = parser.program();
-        TranspilerVisitor visitor;
+        std::unique_ptr<CodeGenerator> generator = std::make_unique<CCodeGenerator>();
+        TranspilerVisitor visitor(std::move(generator));
         std::string cCode = std::any_cast<std::string>(visitor.visitProgram(tree));
 
-        // Write generated C code to file
         std::ofstream outFile(cFilePath);
         if (!outFile) {
             throw std::runtime_error("Failed to create output C file: " + cFilePath);
@@ -92,7 +90,6 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Successfully generated C code: " << cFilePath << std::endl;
 
-        // Compile the generated code
         if (!compileCode(cFilePath, executablePath)) {
             throw std::runtime_error("Compilation failed");
         }

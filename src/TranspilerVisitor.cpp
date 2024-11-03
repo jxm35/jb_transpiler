@@ -1,22 +1,11 @@
-// TranspilerVisitor.cpp
 #include "TranspilerVisitor.h"
+#include "CompilerError.h"
 //#include "../build/JBLangParser.h"
 #include <stdexcept>
 
-// Type and Function implementations remain the same...
-
-std::string outputVariable(const Type& type, const std::string& name) {
-    if (type.isArray()) {
-        return type.toString();
-    } else {
-        return type.toString() + " " + name;
-    }
-}
-
 antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext *ctx) {
     m_output << "#include \"runtime.h\"\n";
-//    m_output << "#include <stdio.h>\n";
-//    m_output << "#include <stdbool.h>\n\n";
+
     for (auto stmt : ctx->preprocessorDirective()) {
         visit(stmt);
         m_output << "\n";
@@ -32,6 +21,23 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext *ctx)
     return m_output.str();
 }
 
+Type TranspilerVisitor::getArrayFromCode(JBLangParser::ArrayDeclContext *ctx) {
+    Type type = m_typeSystem->resolveType(ctx->typeSpec()->getText());
+    std::vector<int> sizes;
+    sizes.reserve(ctx->arraySize().size());
+    for (auto size : ctx->arraySize()) {
+        if (size->IDENTIFIER())  {
+            std::string defineVal =  size->IDENTIFIER()->getText();
+            sizes.emplace_back(std::stoi(m_typeSystem->getDefineValue(defineVal)));
+
+        } else {
+            sizes.emplace_back(std::stoi(size->INTEGER()->getText()));
+        }
+    }
+    type.setArray(ctx->IDENTIFIER()->getText(), sizes);
+    return type;
+}
+
 antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclContext *ctx) {
     auto func = std::make_shared<Function>();
 
@@ -43,12 +49,10 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
             Type paramType;
             std::string paramName;
             if (param->arrayDecl()) {
-                paramName = param->arrayDecl()->IDENTIFIER()->getText();
-                paramType = translateType(param->arrayDecl()->typeSpec()->getText());
-                int size = std::stoi(param->arrayDecl()->arraySize(0)->INTEGER()->getText());
-                paramType.setArray(paramName, size);
+                paramType = this->getArrayFromCode(param->arrayDecl());
+                paramName = paramType.getArrayName();
             } else {
-                paramType = translateType(param->typeSpec()->getText());
+                paramType = m_typeSystem->resolveType(param->typeSpec()->getText());
                 paramName = param->IDENTIFIER()->getText();
             }
             func->params.emplace_back(paramName, paramType);
@@ -56,80 +60,52 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
     }
 
     // Handle return type
-    func->returnType = ctx->typeSpec() ?
-                       translateType(ctx->typeSpec()->getText()) : Type(Type::BaseType::Void);
+    func->returnType = ctx->typeSpec() ? m_typeSystem->resolveType(ctx->typeSpec()->getText()) : Type(Type::BaseType::Void);
 
-    m_functions[func->name] = func;
 
-    // Generate function declaration
-    m_output << func->getSignature();
+    m_typeSystem->registerFunction(func);
+    m_output << m_codeGen->generateFunctionDecl(func);
     visit(ctx->block());
 
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext *ctx) {
-    std::string varName;
-    Type varType;
-    if (ctx->arrayDecl()) {
-        varType = translateType(ctx->arrayDecl()->typeSpec()->getText());
-        varName = ctx->arrayDecl()->IDENTIFIER()->getText();
-        auto size = ctx->arrayDecl()->arraySize(0);
-        if (size->IDENTIFIER())  {
-//            m_output << size->IDENTIFIER()->getText();
-            varType.setArray(varName, std::stoi(m_defines[size->IDENTIFIER()->getText()]));
+    try {
+        std::string varName;
+        Type varType;
+        if (ctx->arrayDecl()) {
+            varType = getArrayFromCode(ctx->arrayDecl());
+            varName = varType.getArrayName();
         } else {
-//            m_output << size->INTEGER()->getText();
-            varType.setArray(varName, std::stoi(size->INTEGER()->getText()));
+            varName = ctx->IDENTIFIER()->getText();
+            varType = m_typeSystem->resolveType(ctx->typeSpec()->getText());
         }
-    } else {
-        varName = ctx->IDENTIFIER()->getText();
-        varType = translateType(ctx->typeSpec()->getText());
+        if (ctx->expression()) {
+            auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
+            m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateVarDecl(varName, varType, " = " + initExpr);
+        } else {
+            m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateVarDecl(varName, varType);
+        }
+        m_symbolTable->addSymbol(varName, varType);
+
+        return nullptr;
     }
-
-    if (isDeclaredInCurrentScope(varName)) {
-        throw std::runtime_error("Variable " + varName + " already declared in this scope");
+    catch (const CompilerError& e) {
+        throw e;
     }
-
-//    if (ctx->arrayDecl()) {
-//        for (auto size : ctx->arrayDecl()->arraySize()) {
-//            m_output << "[";
-//            if (size->IDENTIFIER())  {
-//                m_output << size->IDENTIFIER()->getText();
-//                varType.setArray(std::stoi(m_defines[size->IDENTIFIER()->getText()]));
-//            } else {
-//                m_output << size->INTEGER()->getText();
-//                varType.setArray(std::stoi(size->INTEGER()->getText()));
-//            }
-//            m_output  << "]";
-//        }
-//    }
-//    m_output << varType.toString() << " " << varName;
-    m_output << outputVariable(varType, varName);
-    if (ctx->expression()) {
-        m_output << " = " << std::any_cast<std::string>(visit(ctx->expression()));
-    }
-
-    m_output << ";\n";
-    m_currentScope->variables[varName] = varType;
-
-    return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitBlock(JBLangParser::BlockContext *ctx) {
-    pushScope();
-
-    m_output << "{\n";
-//    this->m_output << "runtime_block_start();\n";
+    m_symbolTable->enterScope();
+    m_output << m_codeGen->generateScopeEntry();
 
     for (auto stmt : ctx->statement()) {
         visit(stmt);
     }
 
-    this->m_output << "runtime_scope_end();\n";
-    m_output << "}\n";
-
-    popScope();
+    m_symbolTable->exitScope();
+    m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateScopeExit(m_symbolTable->getCurrentScopeSymbols());
     return nullptr;
 }
 
@@ -141,26 +117,22 @@ antlrcpp::Any TranspilerVisitor::visitSpawnStmt(JBLangParser::SpawnStmtContext *
 
     auto* funcCall = funcCallCtx->functionCall();
     std::string funcName = funcCall->IDENTIFIER()->getText();
-    auto func = m_functions[funcName];
 
     std::string wrapperName = funcName + "_wrapper_" + std::to_string(m_tempVarCounter++);
-    generateSpawnWrapper(wrapperName, funcCall, func);
+//    generateSpawnWrapper(wrapperName, funcCall, func);
 
-    m_output << "runtime_spawn(" << wrapperName << ", NULL);\n";
+    m_output << m_symbolTable->getIndentLevel() << "runtime_spawn(" << wrapperName << ", NULL);\n";
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitReturnStmt(JBLangParser::ReturnStmtContext *ctx) {
-    m_output << "return";
-    if (ctx->expression()) {
-        m_output << " " << std::any_cast<std::string>(visit(ctx->expression()));
-    }
-    m_output << ";\n";
+    std::string returnExpr = std::any_cast<std::string>(visit(ctx->expression()));
+    m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateReturn(returnExpr, Type(Type::BaseType::NO_TYPE));
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitExprStmt(JBLangParser::ExprStmtContext *ctx) {
-    m_output << std::any_cast<std::string>(visit(ctx->expression())) << ";\n";
+    m_output << m_symbolTable->getIndentLevel() << std::any_cast<std::string>(visit(ctx->expression())) << ";\n";
     return nullptr;
 }
 
@@ -188,26 +160,26 @@ antlrcpp::Any TranspilerVisitor::visitFuncCallExpr(JBLangParser::FuncCallExprCon
 }
 
 antlrcpp::Any TranspilerVisitor::visitMulDivExpr(JBLangParser::MulDivExprContext *ctx) {
-    std::string left = std::any_cast<std::string>(visit(ctx->expression(0)));
-    std::string right = std::any_cast<std::string>(visit(ctx->expression(1)));
+    auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
+    auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
     return left + " " + ctx->op->getText() + " " + right;
 }
 
 antlrcpp::Any TranspilerVisitor::visitAddSubExpr(JBLangParser::AddSubExprContext *ctx) {
-    std::string left = std::any_cast<std::string>(visit(ctx->expression(0)));
-    std::string right = std::any_cast<std::string>(visit(ctx->expression(1)));
+    auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
+    auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
     return left + " " + ctx->op->getText() + " " + right;
 }
 
 antlrcpp::Any TranspilerVisitor::visitCompareExpr(JBLangParser::CompareExprContext *ctx) {
-    std::string left = std::any_cast<std::string>(visit(ctx->expression(0)));
-    std::string right = std::any_cast<std::string>(visit(ctx->expression(1)));
+    auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
+    auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
     return left + " " + ctx->op->getText() + " " + right;
 }
 
 antlrcpp::Any TranspilerVisitor::visitAssignExpr(JBLangParser::AssignExprContext *ctx) {
-    std::string left = std::any_cast<std::string>(visit(ctx->expression(0)));
-    std::string right = std::any_cast<std::string>(visit(ctx->expression(1)));
+    auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
+    auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
     return left + " = " + right;
 }
 
@@ -218,111 +190,24 @@ antlrcpp::Any TranspilerVisitor::visitLiteral(JBLangParser::LiteralContext *ctx)
 }
 
 antlrcpp::Any TranspilerVisitor::visitFunctionCall(JBLangParser::FunctionCallContext *ctx) {
-    std::stringstream result;
-    result << ctx->IDENTIFIER()->getText() << "(";
+    std::vector<std::string> args;
 
     if (ctx->argumentList()) {
-        bool first = true;
+        args.reserve(ctx->argumentList()->expression().size());
         for (auto arg : ctx->argumentList()->expression()) {
-            if (!first) result << ", ";
-            result << std::any_cast<std::string>(visit(arg));
-            first = false;
+            args.emplace_back(std::any_cast<std::string>(visit(arg)));
         }
     }
 
-    result << ")";
-    return result.str();
-}
-
-void TranspilerVisitor::generateSpawnWrapper(
-        const std::string& wrapperName,
-        JBLangParser::FunctionCallContext* funcCall,
-        std::shared_ptr<Function> func) {
-
-    m_output << "void " << wrapperName << "(void* arg) {\n";
-    m_output << "    " << func->name << "(";
-
-    if (funcCall->argumentList()) {
-        bool first = true;
-        for (auto expr : funcCall->argumentList()->expression()) {
-            if (!first) m_output << ", ";
-            m_output << std::any_cast<std::string>(visit(expr));
-            first = false;
-        }
-    }
-
-    m_output << ");\n}\n\n";
-}
-
-Type TranspilerVisitor::translateType(const std::string& sourceType) {
-    Type type;
-
-    size_t arrayStart = sourceType.find('[');
-    bool isArray = arrayStart != std::string::npos;
-    std::string baseType = isArray ? sourceType.substr(0, arrayStart) : sourceType;
-
-    bool isPointer = sourceType.find('*') != std::string::npos;
-    baseType = isPointer ? sourceType.substr(0, sourceType.find('*')) : sourceType;
-
-    if (baseType == "void") type = Type(Type::BaseType::Void);
-    else if (baseType == "int") type = Type(Type::BaseType::Int);
-    else if (baseType == "string") type = Type(Type::BaseType::String, true); // strings are char*
-    else if (baseType == "bool") type = Type(Type::BaseType::Bool);
-    else if (m_typedefs.find(baseType) != m_typedefs.end())type = m_typedefs[baseType];
-    else throw std::runtime_error("Unknown type: " + sourceType);
-
-    if (isPointer) {
-        type.setPointer(true);
-    }
-
-    if (isArray) {
-        size_t arrayEnd = sourceType.find(']');
-        if (arrayEnd != std::string::npos) {
-            std::string sizeStr = sourceType.substr(arrayStart + 1, arrayEnd - arrayStart - 1);
-            int size = sizeStr.empty() ? 0 : std::stoi(sizeStr);
-            type.setArray("james_fix", size);
-        } else {
-            throw std::runtime_error("Invalid array type: " + sourceType);
-        }
-    }
-
-    return type;
-}
-
-bool TranspilerVisitor::isDeclaredInCurrentScope(const std::string& name) const {
-    return m_currentScope->variables.find(name) != m_currentScope->variables.end();
-}
-
-void TranspilerVisitor::pushScope() {
-    auto newScope = std::make_shared<Scope>();
-    newScope->parent = m_currentScope;
-    m_currentScope = newScope;
-    m_isInGlobalScope = false;
-}
-
-void TranspilerVisitor::popScope() {
-    if (m_currentScope->parent) {
-        m_currentScope = m_currentScope->parent;
-        m_isInGlobalScope = (m_currentScope->parent == nullptr);
-    }
-}
-
-TranspilerVisitor::TranspilerVisitor() {}
-
-void TranspilerVisitor::addBuiltinFunctions() {
-
+    return m_codeGen->generateFunctionCall(ctx->IDENTIFIER()->getText(), args);
 }
 
 antlrcpp::Any TranspilerVisitor::visitPreprocessorDirective(JBLangParser::PreprocessorDirectiveContext *ctx) {
-//    if (ctx->getText().substr(0, 8) == "#include") {
-//        std::string includeFile = ctx->STRING()->getText();
-//        m_output << "#include " << includeFile << "\n";
-//    } else
     if (ctx->getText().substr(0, 7) == "#define") {
         std::string name = ctx->IDENTIFIER()->getText();
         std::string value = ctx->INTEGER() ? ctx->INTEGER()->getText() :
                             ctx->STRING() ? ctx->STRING()->getText() : "";
-        m_defines[name] = value;
+        m_typeSystem->registerDefine(name, value);
         m_output << "#define " << name << " " << value << "\n";
     } else {
         m_output << ctx->getText();
@@ -330,30 +215,37 @@ antlrcpp::Any TranspilerVisitor::visitPreprocessorDirective(JBLangParser::Prepro
     return nullptr;
 }
 
-antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext *ctx) {
-    m_output << "struct " << ctx->IDENTIFIER()->getText() << " {\n";
-
+Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext *ctx) {
+    std::string structName = ctx->IDENTIFIER()->getText();
+    std::vector<std::pair<std::string, Type>> members;
+    members.reserve(ctx->structMember().size());
     for (auto member : ctx->structMember()) {
         if (member->arrayDecl()) {
-            visit(member->arrayDecl());
+            Type type = this->getArrayFromCode(member->arrayDecl());
+            members.emplace_back(type.getArrayName(), type);
         } else {
-            Type memberType = translateType(member->typeSpec()->getText());
-            m_output << "    " << memberType.toString() << " "
-                     << member->IDENTIFIER()->getText() << ";\n";
+            members.emplace_back(member->IDENTIFIER()->getText(), m_typeSystem->resolveType(member->typeSpec()->getText()));
         }
     }
 
-    m_output << "}\n";
+    return m_typeSystem->registerStruct(structName, members);
+
+}
+
+antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext *ctx) {
+    Type structType = getStructFromCode(ctx);
+
+    m_output << m_codeGen->generateStructDecl(structType.getStructName(), structType);
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitIfStmt(JBLangParser::IfStmtContext *ctx) {
-    m_output << "if (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
+    m_output << m_symbolTable->getIndentLevel() << "if (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
 
     visit(ctx->statement(0));
 
-    if (ctx->statement(1)) {  // Has else clause
-        m_output << "else ";
+    if (ctx->statement(1)) {
+        m_output << m_symbolTable->getIndentLevel() << "else ";
         visit(ctx->statement(1));
     }
 
@@ -361,7 +253,7 @@ antlrcpp::Any TranspilerVisitor::visitIfStmt(JBLangParser::IfStmtContext *ctx) {
 }
 
 antlrcpp::Any TranspilerVisitor::visitWhileStmt(JBLangParser::WhileStmtContext *ctx) {
-    m_output << "while (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
+    m_output << m_symbolTable->getIndentLevel() << "while (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
     visit(ctx->statement());
     return nullptr;
 }
@@ -382,20 +274,10 @@ antlrcpp::Any TranspilerVisitor::visitDereferenceExpr(JBLangParser::DereferenceE
 
 
 antlrcpp::Any TranspilerVisitor::visitTypedefDecl(JBLangParser::TypedefDeclContext *ctx) {
-    Type type;
-    m_output << "typedef ";
-    if (ctx->structDecl()) {
-        visit(ctx->structDecl());
-        type = Type(Type::BaseType::Struct);
-        type.setStruct(ctx->structDecl()->IDENTIFIER()->getText());
-    } else {
-        type = translateType(ctx->typeSpec()->getText());
-        m_output << type.toString();
-    }
-    std::string alias = ctx->IDENTIFIER()->getText();
-    m_typedefs[alias] = type;
+    Type type = ctx->structDecl() ? getStructFromCode(ctx->structDecl()) : m_typeSystem->resolveType(ctx->typeSpec()->getText());
+    m_typeSystem->registerTypeDef(ctx->IDENTIFIER()->getText(), type);
+    m_output << m_codeGen->generateTypeDef(ctx->IDENTIFIER()->getText(), type);
 
-    m_output  << " " << alias << ";\n";
     return nullptr;
 }
 
@@ -406,87 +288,24 @@ antlrcpp::Any TranspilerVisitor::visitArrayAccessExpr(JBLangParser::ArrayAccessE
 }
 
 antlrcpp::Any TranspilerVisitor::visitNewExpr(JBLangParser::NewExprContext *ctx) {
-    return "runtime_alloc(sizeof(" + ctx->typeSpec()->getText() + "))";
+    return m_codeGen->generateAlloc(m_typeSystem->resolveType(ctx->typeSpec()->getText()));
 }
 
 antlrcpp::Any TranspilerVisitor::visitArrayDecl(JBLangParser::ArrayDeclContext *ctx) {
-    Type memberType = translateType(ctx->typeSpec()->getText());
-    m_output << "    " << memberType.toString() << " "
-             << ctx->IDENTIFIER()->getText();
-    for (auto size : ctx->arraySize()) {
-        m_output << "[";
-        if (size->IDENTIFIER())  {
-            m_output << size->IDENTIFIER()->getText();
-        } else {
-            m_output << size->INTEGER()->getText();
-        }
-        m_output  << "]";
-    }
-    m_output << ";\n";
+    Type type = getArrayFromCode(ctx);
+    m_output << type.toString();
+
+//    m_output << "    " << memberType.toString() << " "
+//             << ctx->IDENTIFIER()->getText();
+//    for (auto size : ctx->arraySize()) {
+//        m_output << "[";
+//        if (size->IDENTIFIER())  {
+//            m_output << size->IDENTIFIER()->getText();
+//        } else {
+//            m_output << size->INTEGER()->getText();
+//        }
+//        m_output  << "]";
+//    }
+//    m_output << ";\n";
     return nullptr;
-}
-
-bool TranspilerVisitor::Scope::lookupVariable(const std::string& name, Type& type) const {
-    auto it = variables.find(name);
-    if (it != variables.end()) {
-        type = it->second;
-        return true;
-    }
-    return parent && parent->lookupVariable(name, type);
-}
-
-std::string baseTypeToString(const Type::BaseType& type) {
-    switch (type) {
-        case Type::BaseType::Void:
-            return "void";
-        case Type::BaseType::Int:
-            return "int";
-        case Type::BaseType::String:
-            return "char*";
-        case Type::BaseType::Bool:
-            return "bool";
-        case Type::BaseType::Struct:
-            return "struct";
-    }
-}
-std::string Type::toString() const {
-    std::string str;
-    if (m_isStruct) {
-        str = this->getStructName();
-    } else {
-        str = baseTypeToString(this->m_baseType);
-    }
-
-    if (m_arrayInfo.isArray) {
-        str += " " + m_arrayInfo.name;
-        str += "[";
-        if (m_arrayInfo.size > 0) {
-            str += std::to_string(m_arrayInfo.size);
-        }
-        str += "]";
-    }
-
-    if (this->isPointer()) {
-        str += "*";
-    }
-    return str;
-}
-
-
-std::string Function::getSignature() const {
-    std::string name = this->name;
-    if (name == "main") {
-        name = "main_";
-    }
-    std::string signature =  this->returnType.toString() + " " + name + "(";
-    bool first = true;
-    for (const std::pair<std::string, Type>& paramPair : this->params) {
-        if (!first) {
-            signature += ", ";
-        }
-        signature += outputVariable(paramPair.second, paramPair.first);
-//        signature +=  paramPair.second.toString() + " " + paramPair.first;
-        first = false;
-    }
-    return signature + ")";
 }

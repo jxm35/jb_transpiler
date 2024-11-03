@@ -3,24 +3,28 @@
 # Exit on any error
 set -e
 
-# Create build directory if it doesn't exist
+# Ensure a file argument is provided, or use default file
+TEST_FILE=${1:-"test/test.jb"}
+
+if [ ! -f "$TEST_FILE" ]; then
+    echo "Error: Test file '$TEST_FILE' not found."
+    echo "Usage: $0 <test-file>"
+    exit 1
+fi
+
 mkdir -p build
 
-# Generate build files
 cd build
 cmake ..
 
-# Build the project
 cmake --build .
 
-# Run a test if provided
-if [ -f "../test/test.jb" ]; then
-    echo "Running test file..."
-    ./transpiler ../test/test.jb -o ../output
-    cd ..
-    echo "----------   Generated Code   ----------"
-    cat output.c
-    echo "----------   Generated Code   ----------"
-#    gcc output.c -o test_program
-    ./output
-fi
+echo "Running file '$TEST_FILE'..."
+./transpiler "../$TEST_FILE" -o ../output
+cd ..
+
+echo "----------   Generated Code   ----------"
+cat output.c
+echo "----------   Generated Code   ----------"
+
+./output
