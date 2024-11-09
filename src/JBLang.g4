@@ -103,6 +103,15 @@ expression
     | '&' expression                               # AddressOfExpr
     | '*' expression                               # DereferenceExpr
     | expression '[' expression ']'                 # ArrayAccessExpr
+    | '{' initializerList? '}'                         # StructInitExpr
+    ;
+
+initializerList
+    : initializer (',' initializer)* ','?
+    ;
+
+initializer
+    : '.' IDENTIFIER '=' expression
     ;
 
 functionCall

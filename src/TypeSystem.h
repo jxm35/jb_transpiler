@@ -49,8 +49,11 @@ public:
         m_arrayInfo.name = std::move(arrayName);
     }
 
-    void setStruct(const std::string& name, std::vector<std::pair<std::string, Type>> members) {
+    void setStruct(const std::string& name) {
         m_structName = name;
+    }
+
+    void setStructMembers(std::vector<std::pair<std::string, Type>> members) {
         m_structMembers = std::move(members);
     }
 
@@ -84,9 +87,10 @@ public:
         return translateType(typeStr);
     }
 
-    Type  registerStruct(std::string, std::vector<std::pair<std::string, Type>>);
+    Type  registerStruct(const std::string&);
+    Type  setStructMembers(const std::string&, std::vector<std::pair<std::string, Type>>);
 
-    void registerTypeDef(std::string name, Type type);
+    void registerTypeDef(const std::string& name, Type type);
 
     std::string getDefineValue(const std::string& key) {
         return m_defines[key];

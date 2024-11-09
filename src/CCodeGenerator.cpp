@@ -52,10 +52,28 @@ std::string CCodeGenerator::generateScopeEntry() {
     return "{\n";
 }
 
-std::string CCodeGenerator::generateScopeExit(const std::map<std::string, Type> &scopeVars) {
+std::string CCodeGenerator::generateScopeExit(const std::map<std::string, Variable> &scopeVars) {
     return "}\n";
 }
 
 std::string CCodeGenerator::generateAlloc(const Type &type) {
     return "runtime_alloc(sizeof(" + type.toString() + "))";
+}
+
+std::string CCodeGenerator::generateIncRef(const Variable &var, std::string other) {
+    if (!m_useRefCounts) return "";
+    std::string code = "runtime_inc_ref_count(" + var.name;
+    code += ", " + other;
+    return code + ");\n";
+}
+
+std::string CCodeGenerator::generateDecRef(const Variable &var) {
+    if (!m_useRefCounts) return "";
+    std::string code = "runtime_dec_ref_count(" + var.name + ", ";
+    if (!var.field_name.empty()) {
+        code += "offsetof(" + var.struct_name + ", " + var.field_name + ")";
+    } else {
+        code += "0";
+    }
+    return code + ");\n";
 }

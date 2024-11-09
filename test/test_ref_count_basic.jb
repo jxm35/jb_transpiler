@@ -1,0 +1,13 @@
+#include <stdio.h>
+
+typedef struct Node {
+    int data;
+} Node;
+
+int main() {
+    Node *n = new Node;
+    n->data = 5;
+    Node *x = n;
+    x = n;
+    printf("data: %d\n", n->data);
+}

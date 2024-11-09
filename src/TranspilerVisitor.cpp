@@ -64,14 +64,17 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
 
 
     m_typeSystem->registerFunction(func);
+    m_symbolTable->currentFunc = func;
     m_output << m_codeGen->generateFunctionDecl(func);
     visit(ctx->block());
+    m_symbolTable->currentFunc = nullptr;
 
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext *ctx) {
     try {
+        std::string indentLevel = m_symbolTable->getIndentLevel();
         std::string varName;
         Type varType;
         if (ctx->arrayDecl()) {
@@ -83,9 +86,14 @@ antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext *ctx)
         }
         if (ctx->expression()) {
             auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
-            m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateVarDecl(varName, varType, " = " + initExpr);
+            Variable assignedFrom;
+            bool found = m_symbolTable->lookupSymbol(initExpr, assignedFrom);
+            if (found && assignedFrom.type.isPointer()) {
+                m_output << indentLevel << m_codeGen->generateIncRef(assignedFrom);
+            }
+            m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType, " = " + initExpr);
         } else {
-            m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateVarDecl(varName, varType);
+            m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType);
         }
         m_symbolTable->addSymbol(varName, varType);
 
@@ -100,12 +108,20 @@ antlrcpp::Any TranspilerVisitor::visitBlock(JBLangParser::BlockContext *ctx) {
     m_symbolTable->enterScope();
     m_output << m_codeGen->generateScopeEntry();
 
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+
     for (auto stmt : ctx->statement()) {
         visit(stmt);
     }
 
+    for (const auto& var: m_symbolTable->getCurrentScopeSymbols()) {
+        if (var.second.type.isPointer()) {
+            m_output << indentLevel << m_codeGen->generateDecRef(var.second);
+        }
+    }
+
     m_symbolTable->exitScope();
-    m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateScopeExit(m_symbolTable->getCurrentScopeSymbols());
+    m_output << indentLevel << m_codeGen->generateScopeExit(m_symbolTable->getCurrentScopeSymbols());
     return nullptr;
 }
 
@@ -126,8 +142,23 @@ antlrcpp::Any TranspilerVisitor::visitSpawnStmt(JBLangParser::SpawnStmtContext *
 }
 
 antlrcpp::Any TranspilerVisitor::visitReturnStmt(JBLangParser::ReturnStmtContext *ctx) {
-    std::string returnExpr = std::any_cast<std::string>(visit(ctx->expression()));
-    m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateReturn(returnExpr, Type(Type::BaseType::NO_TYPE));
+    Variable returnedVariable;
+    this->addRefCounts = false;
+    auto returnExpr = std::any_cast<std::string>(visit(ctx->expression()));
+    this->addRefCounts = true;
+    bool found = m_symbolTable->lookupSymbol(returnExpr, returnedVariable);
+    if (found && returnedVariable.type.isPointer()) {
+        m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateIncRef(returnedVariable);
+    }
+
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+    for (const auto& var: m_symbolTable->getCurrentScopeSymbols()) {
+        if (var.second.type.isPointer()) {
+            m_output << indentLevel << m_codeGen->generateDecRef(var.second);
+        }
+    }
+
+    m_output << indentLevel << m_codeGen->generateReturn(returnExpr, Type(Type::BaseType::NO_TYPE));
     return nullptr;
 }
 
@@ -180,6 +211,27 @@ antlrcpp::Any TranspilerVisitor::visitCompareExpr(JBLangParser::CompareExprConte
 antlrcpp::Any TranspilerVisitor::visitAssignExpr(JBLangParser::AssignExprContext *ctx) {
     auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
     auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
+
+    Variable assignedFrom;
+    bool found = m_symbolTable->lookupSymbol(right, assignedFrom);
+    if (found && assignedFrom.type.isPointer()) {
+        // check if we are assigning to a struct pointer
+        Variable assignedTo;
+        size_t pos = left.find("->");
+        if (pos != std::string::npos) {
+            found = m_symbolTable->lookupSymbol(left.substr(0, pos), assignedTo);
+            if (found && assignedTo.type.isPointer()) {
+                m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateIncRef(assignedFrom, assignedTo.name);
+            }
+        } else {
+            m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateIncRef(assignedFrom);
+        }
+    }
+    found = m_symbolTable->lookupSymbol(left, assignedFrom);
+    if (found && assignedFrom.type.isPointer()) {
+        m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateDecRef(assignedFrom);
+    }
+
     return left + " = " + right;
 }
 
@@ -191,15 +243,42 @@ antlrcpp::Any TranspilerVisitor::visitLiteral(JBLangParser::LiteralContext *ctx)
 
 antlrcpp::Any TranspilerVisitor::visitFunctionCall(JBLangParser::FunctionCallContext *ctx) {
     std::vector<std::string> args;
+    std::string code = "";
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+    bool pointerArgs = false;
 
     if (ctx->argumentList()) {
         args.reserve(ctx->argumentList()->expression().size());
         for (auto arg : ctx->argumentList()->expression()) {
-            args.emplace_back(std::any_cast<std::string>(visit(arg)));
+            auto argString = std::any_cast<std::string>(visit(arg));
+
+            Variable assignedFrom;
+            bool found = m_symbolTable->lookupSymbol(argString, assignedFrom);
+            if (this->addRefCounts && found && assignedFrom.type.isPointer()) {
+                pointerArgs = true;
+                m_output << indentLevel <<  m_codeGen->generateIncRef(assignedFrom);
+            }
+
+            args.emplace_back(argString);
         }
     }
 
-    return m_codeGen->generateFunctionCall(ctx->IDENTIFIER()->getText(), args);
+    code += indentLevel + m_codeGen->generateFunctionCall(ctx->IDENTIFIER()->getText(), args) + (pointerArgs ? ";\n" : "");
+
+    if (this->addRefCounts && ctx->argumentList()) {
+        args.reserve(ctx->argumentList()->expression().size());
+        for (auto arg : ctx->argumentList()->expression()) {
+            auto argString = std::any_cast<std::string>(visit(arg));
+
+            Variable assignedFrom;
+            bool found = m_symbolTable->lookupSymbol(argString, assignedFrom);
+            if (found && assignedFrom.type.isPointer()) {
+                code +=  indentLevel + m_codeGen->generateDecRef(assignedFrom);
+            }
+        }
+    }
+
+    return code;
 }
 
 antlrcpp::Any TranspilerVisitor::visitPreprocessorDirective(JBLangParser::PreprocessorDirectiveContext *ctx) {
@@ -217,7 +296,10 @@ antlrcpp::Any TranspilerVisitor::visitPreprocessorDirective(JBLangParser::Prepro
 
 Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext *ctx) {
     std::string structName = ctx->IDENTIFIER()->getText();
+    m_typeSystem->registerStruct(structName);
+
     std::vector<std::pair<std::string, Type>> members;
+
     members.reserve(ctx->structMember().size());
     for (auto member : ctx->structMember()) {
         if (member->arrayDecl()) {
@@ -228,7 +310,7 @@ Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext *ctx) 
         }
     }
 
-    return m_typeSystem->registerStruct(structName, members);
+    return m_typeSystem->setStructMembers(structName, members);
 
 }
 
@@ -240,26 +322,33 @@ antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext
 }
 
 antlrcpp::Any TranspilerVisitor::visitIfStmt(JBLangParser::IfStmtContext *ctx) {
-    m_output << m_symbolTable->getIndentLevel() << "if (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
+    this->addRefCounts = false;
+    m_output << m_symbolTable->getIndentLevel() << "if (" << std::any_cast<std::string>(visit(ctx->expression())) << ") {\n";
+    this->addRefCounts = true;
 
     visit(ctx->statement(0));
+    m_output << "}\n";
 
     if (ctx->statement(1)) {
-        m_output << m_symbolTable->getIndentLevel() << "else ";
+        m_output << m_symbolTable->getIndentLevel() << "else {\n";
         visit(ctx->statement(1));
+        m_output << "}\n";
     }
 
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitWhileStmt(JBLangParser::WhileStmtContext *ctx) {
-    m_output << m_symbolTable->getIndentLevel() << "while (" << std::any_cast<std::string>(visit(ctx->expression())) << ") ";
+    this->addRefCounts = false;
+    m_output << m_symbolTable->getIndentLevel() << "while (" << std::any_cast<std::string>(visit(ctx->expression())) << ") {\n";
+    this->addRefCounts = true;
     visit(ctx->statement());
+    m_output << "}\n";
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitPointerMemberExpr(JBLangParser::PointerMemberExprContext *ctx) {
-    std::string base = std::any_cast<std::string>(visit(ctx->expression()));
+    auto base = std::any_cast<std::string>(visit(ctx->expression()));
     return base + "->" + ctx->IDENTIFIER()->getText();
 }
 
@@ -270,8 +359,6 @@ antlrcpp::Any TranspilerVisitor::visitAddressOfExpr(JBLangParser::AddressOfExprC
 antlrcpp::Any TranspilerVisitor::visitDereferenceExpr(JBLangParser::DereferenceExprContext *ctx) {
     return "*" + std::any_cast<std::string>(visit(ctx->expression()));
 }
-
-
 
 antlrcpp::Any TranspilerVisitor::visitTypedefDecl(JBLangParser::TypedefDeclContext *ctx) {
     Type type = ctx->structDecl() ? getStructFromCode(ctx->structDecl()) : m_typeSystem->resolveType(ctx->typeSpec()->getText());
@@ -294,18 +381,28 @@ antlrcpp::Any TranspilerVisitor::visitNewExpr(JBLangParser::NewExprContext *ctx)
 antlrcpp::Any TranspilerVisitor::visitArrayDecl(JBLangParser::ArrayDeclContext *ctx) {
     Type type = getArrayFromCode(ctx);
     m_output << type.toString();
-
-//    m_output << "    " << memberType.toString() << " "
-//             << ctx->IDENTIFIER()->getText();
-//    for (auto size : ctx->arraySize()) {
-//        m_output << "[";
-//        if (size->IDENTIFIER())  {
-//            m_output << size->IDENTIFIER()->getText();
-//        } else {
-//            m_output << size->INTEGER()->getText();
-//        }
-//        m_output  << "]";
-//    }
-//    m_output << ";\n";
     return nullptr;
+}
+
+antlrcpp::Any TranspilerVisitor::visitStructInitExpr(JBLangParser::StructInitExprContext *ctx) {
+    std::string code = "{\n";
+    code += std::any_cast<std::string>(visit(ctx->initializerList()));
+
+    return code + m_symbolTable->getIndentLevel() +  "}";
+}
+
+antlrcpp::Any TranspilerVisitor::visitInitializerList(JBLangParser::InitializerListContext *ctx) {
+    std::string code;
+    Variable assignedFrom;
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+
+    for (auto initializer : ctx->initializer()) {
+        std::string assignExpr = initializer->expression()->getText();
+        bool found = m_symbolTable->lookupSymbol(assignExpr, assignedFrom);
+        if (found && assignedFrom.type.isPointer()) {
+            m_output <<  indentLevel + m_codeGen->generateIncRef(assignedFrom);
+        }
+        code += indentLevel +  "." + initializer->IDENTIFIER()->getText() + " = " + assignExpr + ",\n";
+    }
+    return code;
 }

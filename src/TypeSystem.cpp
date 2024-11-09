@@ -1,5 +1,7 @@
 #include "TypeSystem.h"
 
+#include <utility>
+
 std::string outputVariable(const Type& type, const std::string& name) {
     if (type.isArray()) {
         return type.toString();
@@ -78,6 +80,7 @@ Type TypeSystem::translateType(const std::string& sourceType) {
     else if (baseType == "string") type = Type(Type::BaseType::String, true); // strings are char*
     else if (baseType == "bool") type = Type(Type::BaseType::Bool);
     else if (m_typedefs.find(baseType) != m_typedefs.end())type = m_typedefs[baseType];
+    else if (m_structs.find(baseType) != m_typedefs.end())type = m_structs[baseType];
     else throw std::runtime_error("Unknown type: " + sourceType);
 
     if (isPointer) {
@@ -98,15 +101,21 @@ Type TypeSystem::translateType(const std::string& sourceType) {
     return type;
 }
 
-Type TypeSystem::registerStruct(std::string name, std::vector<std::pair<std::string, Type>> members) {
+Type TypeSystem::registerStruct(const std::string& name) {
     Type type = Type(Type::BaseType::Struct);
-    type.setStruct(name, members);
+    type.setStruct(name);
     m_structs[name] = type;
     return type;
 
 }
 
-void TypeSystem::registerTypeDef(std::string name, Type type) {
+Type TypeSystem::setStructMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members) {
+    Type type = m_structs[name];
+    type.setStructMembers(std::move(members));
+    return type;
+}
+
+void TypeSystem::registerTypeDef(const std::string& name, Type type) {
     m_typedefs[name] = type;
 }
 

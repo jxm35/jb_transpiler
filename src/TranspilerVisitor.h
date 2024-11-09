@@ -53,6 +53,9 @@ public:
     virtual antlrcpp::Any visitDereferenceExpr(JBLangParser::DereferenceExprContext *ctx) override;
     virtual antlrcpp::Any visitArrayAccessExpr(JBLangParser::ArrayAccessExprContext *ctx) override;
     virtual antlrcpp::Any visitNewExpr(JBLangParser::NewExprContext *ctx) override;
+    virtual antlrcpp::Any visitStructInitExpr(JBLangParser::StructInitExprContext *ctx) override;
+
+    virtual antlrcpp::Any visitInitializerList(JBLangParser::InitializerListContext *ctx) override;
 
     virtual antlrcpp::Any visitFunctionCall(JBLangParser::FunctionCallContext *ctx) override;
     Type getStructFromCode(JBLangParser::StructDeclContext *ctx);
@@ -68,4 +71,6 @@ private:
 
     std::stringstream m_output;
     int m_tempVarCounter;
+
+    bool addRefCounts = true;
 };

@@ -1,10 +1,17 @@
 #include <stdio.h>
 
+void add_in_place(int a, int b, int *c) {
+    *c = a + b;
+}
+
 int add(int a, int b) {
-    return a + b;
+    int *c = new int;
+    add_in_place(a, b, c);
+    return *c;
 }
 
 int main() {
+
     int x = 5;
     int y = 10;
     int z = add(x, y);

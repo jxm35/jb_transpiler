@@ -8,7 +8,7 @@ const RuntimeAllocator* get_allocator_implementation(void) {
     return get_mark_sweep_allocator();
 #elif defined(USE_REF_COUNT)
     #include "reference_count_allocator.h"
-    return get_ref_count_allocator();
+    return get_reference_count_allocator();
 #else
     #include "simple_allocator.h"
     return get_simple_allocator();

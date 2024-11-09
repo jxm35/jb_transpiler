@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include "TypeSystem.h"
+#include "SymbolTable.h"
 
 class CodeGenerator {
 public:
@@ -22,10 +23,10 @@ public:
                                              const std::vector<std::string>& args) = 0;
     virtual std::string generateReturn(const std::string& value, const Type& type) = 0;
     virtual std::string generateScopeEntry() = 0;
-    virtual std::string generateScopeExit(const std::map<std::string, Type>& scopeVars) = 0;
+    virtual std::string generateScopeExit(const std::map<std::string, Variable>& scopeVars) = 0;
 
-//    virtual std::string generateIncRef(const std::string& var) = 0;
-//    virtual std::string generateDecRef(const std::string& var) = 0;
+    virtual std::string generateIncRef(const Variable& var, std::string other = "NULL") = 0;
+    virtual std::string generateDecRef(const Variable& var) = 0;
     virtual std::string generateAlloc(const Type& type) = 0;
 };
 

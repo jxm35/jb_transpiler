@@ -75,11 +75,14 @@ int main(int argc, char* argv[]) {
         antlr4::CommonTokenStream tokens(&lexer);
         JBLangParser parser(&tokens);
 
+        std::string allocator_type = "reference_count";
+        bool useRefCount = true;
+
         // Parse and visit
         auto* tree = parser.program();
-        std::unique_ptr<CodeGenerator> generator = std::make_unique<CCodeGenerator>();
+        std::unique_ptr<CodeGenerator> generator = std::make_unique<CCodeGenerator>(useRefCount);
         TranspilerVisitor visitor(std::move(generator));
-        std::string cCode = std::any_cast<std::string>(visitor.visitProgram(tree));
+        auto cCode = std::any_cast<std::string>(visitor.visitProgram(tree));
 
         std::ofstream outFile(cFilePath);
         if (!outFile) {
@@ -90,7 +93,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Successfully generated C code: " << cFilePath << std::endl;
 
-        if (!compileCode(cFilePath, executablePath)) {
+        if (!compileCode(cFilePath, executablePath, allocator_type)) {
             throw std::runtime_error("Compilation failed");
         }
 

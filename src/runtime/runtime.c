@@ -27,7 +27,6 @@ void* runtime_alloc(size_t bytes) {
 
 void runtime_scope_end() {
     printf("scope ended\n");
-//    runtime_gc();
 }
 
 const char* runtime_get_allocator_name(void) {
@@ -41,4 +40,15 @@ void runtime_print_stats(void) {
     printf("\n\nRuntime Stats\n");
     printf("Total allocs: %zu\nTotal collections: %zu\n", stats->total_allocations, stats->total_collections);
     printf("Current bytes: %zu\nPeak bytes: %zu\n", stats->current_bytes, stats->peak_bytes);
+}
+
+void runtime_inc_ref_count(void * ptr, void *other) {
+    if (current_allocator->inc_ref_count) {
+        current_allocator->inc_ref_count(ptr, other);
+    }
+}
+void runtime_dec_ref_count(void * ptr, size_t offset) {
+    if (current_allocator->dec_ref_count) {
+        current_allocator->dec_ref_count(ptr, offset);
+    }
 }
