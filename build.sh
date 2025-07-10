@@ -4,7 +4,7 @@
 set -e
 
 # Ensure a file argument is provided, or use default file
-TEST_FILE=${1:-"test/test.jb"}
+TEST_FILE=${1:-"tests/examples/test.jb"}
 
 if [ ! -f "$TEST_FILE" ]; then
     echo "Error: Test file '$TEST_FILE' not found."

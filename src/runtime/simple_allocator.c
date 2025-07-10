@@ -1,4 +1,4 @@
-#include "simple_allocator.h"
+#include "jblang/runtime/simple_allocator.h"
 #include <stdio.h>
 #include <string.h>
 

@@ -1,20 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
 project(JBLangTranspiler)
 
-# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add to CMakeLists.txt before project()
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
-# Find Java (needed for ANTLR)
 find_package(Java COMPONENTS Runtime REQUIRED)
 
-# Set ANTLR jar path
 set(ANTLR_JAR ${CMAKE_SOURCE_DIR}/antlr-4.13.1-complete.jar)
 
-# Find ANTLR runtime
 find_library(ANTLR4_RUNTIME
         NAMES antlr4-runtime
         PATHS /usr/local/lib
@@ -29,7 +24,12 @@ find_path(ANTLR4_INCLUDE_DIR
         REQUIRED
         )
 
-# Custom command to generate ANTLR parser
+include_directories(
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}
+        ${ANTLR4_INCLUDE_DIR}
+)
+
 add_custom_command(
         OUTPUT
         ${CMAKE_BINARY_DIR}/JBLangLexer.cpp
@@ -39,14 +39,13 @@ add_custom_command(
         COMMAND
         ${Java_JAVA_EXECUTABLE} -jar ${ANTLR_JAR} -Dlanguage=Cpp -visitor -no-listener
         -o ${CMAKE_BINARY_DIR}
-        ${CMAKE_SOURCE_DIR}/src/JBLang.g4
+        ${CMAKE_SOURCE_DIR}/grammar/JBLang.g4
         DEPENDS
-        ${CMAKE_SOURCE_DIR}/src/JBLang.g4
+        ${CMAKE_SOURCE_DIR}/grammar/JBLang.g4
         WORKING_DIRECTORY
         ${CMAKE_BINARY_DIR}
 )
 
-# Add the generated files to a library
 add_library(JBLangParser
         ${CMAKE_BINARY_DIR}/JBLangLexer.cpp
         ${CMAKE_BINARY_DIR}/JBLangParser.cpp
@@ -66,12 +65,31 @@ target_link_libraries(JBLangParser
         ${ANTLR4_RUNTIME}
         )
 
-# Add the main executable
+add_library(JBLangCore
+        src/ast/TranspilerVisitor.cpp
+        src/codegen/CCodeGenerator.cpp
+        src/types/TypeSystem.cpp
+        src/types/SymbolTable.cpp
+        src/core/CompilerError.cpp
+        src/runtime/runtime.c
+        src/runtime/allocator_impl.c
+        src/runtime/reference_count_allocator.c
+        src/runtime/mark_sweep_allocator.c
+        src/runtime/simple_allocator.c
+        )
+
+target_include_directories(JBLangCore
+        PUBLIC
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}
+        )
+
 add_executable(transpiler
         src/main.cpp
-        src/TranspilerVisitor.cpp src/CCodeGenerator.cpp src/CodeGenerator.h src/SymbolTable.h src/TypeSystem.cpp src/TypeSystem.h src/CompilerError.cpp src/CompilerError.h src/SymbolTable.cpp src/SymbolTable.h src/CCodeGenerator.h)
+        )
 
 target_link_libraries(transpiler
         PRIVATE
+        JBLangCore
         JBLangParser
         )

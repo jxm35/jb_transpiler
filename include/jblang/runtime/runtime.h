@@ -12,14 +12,14 @@ void runtime_scope_end(void);
 void runtime_init(void);
 void runtime_shutdown(void);
 
-void runtime_inc_ref_count(void * ptr, void *other);
-void runtime_dec_ref_count(void * ptr, size_t offset);
+void runtime_inc_ref_count(void* ptr, void* other);
+void runtime_dec_ref_count(void* ptr, size_t offset);
 
 typedef struct {
-    size_t total_allocations;
-    size_t current_bytes;
-    size_t peak_bytes;
-    size_t total_collections;
+  size_t total_allocations;
+  size_t current_bytes;
+  size_t peak_bytes;
+  size_t total_collections;
 } AllocatorStats;
 
 const char* runtime_get_allocator_name(void);

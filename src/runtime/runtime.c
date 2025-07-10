@@ -1,7 +1,7 @@
-#include "runtime.h"
-#include "allocator_interface.h"
+#include "jblang/runtime/runtime.h"
+#include "jblang/runtime/allocator_interface.h"
 #include <stdio.h>
-
+#include <stddef.h>
 
 static const RuntimeAllocator* current_allocator = NULL;
 

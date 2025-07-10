@@ -1,4 +1,4 @@
-#include "reference_count_allocator.h"
+#include "jblang/runtime/reference_count_allocator.h"
 #include <stdio.h>
 #include <string.h>
 

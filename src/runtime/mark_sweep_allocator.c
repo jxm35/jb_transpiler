@@ -1,4 +1,4 @@
-#include "mark_sweep_allocator.h"
+#include "jblang/runtime/mark_sweep_allocator.h"
 #include <stdio.h>
 
 // Implementation details...
