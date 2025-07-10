@@ -4,11 +4,18 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>
+#include <memory>
 #include "jblang/types/TypeSystem.h"
 #include "jblang/core/CompilerError.h"
 
-class Variable { ;
+class Variable {
 public:
+    Variable() = default;
+    Variable(std::string name, Type type, std::string struct_name = "", std::string field_name = "")
+            :name(std::move(name)), type(std::move(type)),
+             struct_name(std::move(struct_name)), field_name(std::move(field_name)) { }
+
     std::string name;
     Type type;
     std::string struct_name;
@@ -17,9 +24,17 @@ public:
 
 class SymbolTable {
 public:
+    SymbolTable() = default;
+    ~SymbolTable() = default;
+
+    SymbolTable(const SymbolTable&) = delete;
+    SymbolTable& operator=(const SymbolTable&) = delete;
+    SymbolTable(SymbolTable&&) = default;
+    SymbolTable& operator=(SymbolTable&&) = default;
+
     void enterScope()
     {
-        scopes.push_back(Scope{});
+        scopes.emplace_back();
     }
 
     void exitScope()
@@ -29,57 +44,58 @@ public:
         }
     }
 
-    std::string getIndentLevel()
+    std::string getIndentLevel() const
     {
         return std::string(this->scopes.size()*4, ' ');
     }
 
-    void addSymbol(const std::string& name, const Type& type, std::string struct_name = "", std::string field_name = "")
+    void addSymbol(const std::string& name, const Type& type,
+            std::string struct_name = "", std::string field_name = "")
     {
         if (scopes.empty()) {
             throw CompilerError("No active scope");
         }
-        Variable v = {
-                .name = name,
-                .type = type,
-                .struct_name = std::move(struct_name),
-                .field_name = std::move(field_name),
-        };
-        scopes.back().symbols[name] = v;
+
+        Variable var(name, type, std::move(struct_name), std::move(field_name));
+        scopes.back().symbols[name] = std::move(var);
     }
 
     bool lookupSymbol(const std::string& name, Variable& var) const
     {
         for (auto it = scopes.rbegin(); it!=scopes.rend(); ++it) {
-            auto found = it->symbols.find(name);
+            const auto found = it->symbols.find(name);
             if (found!=it->symbols.end()) {
                 var = found->second;
                 return true;
             }
         }
-        for (const auto& param : currentFunc->params) {
-            if (param.first==name) {
-                var = Variable{
-                        .name = name,
-                        .type = param.second,
-                };
-                return true;
+
+        if (currentFunc) {
+            for (const auto& param : currentFunc->params) {
+                if (param.first==name) {
+                    var = Variable(name, param.second);
+                    return true;
+                }
             }
         }
+
         return false;
     }
 
-    std::map<std::string, Variable> getCurrentScopeSymbols() const
+    const std::map<std::string, Variable>& getCurrentScopeSymbols() const
     {
-        return scopes.empty() ? std::map<std::string, Variable>{} : scopes.back().symbols;
+        static const std::map<std::string, Variable> empty;
+        return scopes.empty() ? empty : scopes.back().symbols;
     }
+
     std::shared_ptr<Function> currentFunc;
+
 private:
     struct Scope {
       std::map<std::string, Variable> symbols;
     };
+
     std::vector<Scope> scopes;
 };
 
 #endif //SYMBOLTABLE_H
-
