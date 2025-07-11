@@ -1,8 +1,8 @@
 #ifndef SIMPLE_ALLOCATOR_H
 #define SIMPLE_ALLOCATOR_H
 
-#include "jblang/runtime/allocator_interface.h"
+#include "allocator_interface.h"
 
 const RuntimeAllocator* get_simple_allocator(void);
 
-#endif // SIMPLE_ALLOCATOR_H
+#endif

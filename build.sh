@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# Exit on any error
 set -e
 
-# Ensure a file argument is provided, or use default file
 TEST_FILE=${1:-"tests/examples/test.jb"}
 
 if [ ! -f "$TEST_FILE" ]; then
@@ -16,7 +14,6 @@ mkdir -p build
 
 cd build
 cmake ..
-
 cmake --build .
 
 echo "Running file '$TEST_FILE'..."

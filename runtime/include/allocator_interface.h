@@ -2,8 +2,7 @@
 #define ALLOCATOR_INTERFACE_H
 
 #include <stdlib.h>
-#include <stdio.h>
-#include "jblang/runtime/runtime.h"
+#include "runtime.h"
 
 typedef struct {
   const char* name;
@@ -20,4 +19,4 @@ typedef struct {
 
 const RuntimeAllocator* get_allocator_implementation(void);
 
-#endif // ALLOCATOR_INTERFACE_H
+#endif

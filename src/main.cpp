@@ -8,14 +8,12 @@
 #include <cstdlib>
 #include <filesystem>
 
-// Helper function to check if a file exists
 bool fileExists(const std::string& path)
 {
     std::ifstream f(path.c_str());
     return f.good();
 }
 
-// Helper function to get file name without extension
 std::string getBaseFileName(const std::string& path)
 {
     std::filesystem::path p(path);
@@ -33,14 +31,11 @@ bool compileCode(const std::string& cFilePath, const std::string& outputPath,
         allocatorFlag = "-DUSE_REF_COUNT";
     }
 
-    std::string command = "gcc -o "+outputPath+" "+
+    std::string command = "cd ../runtime && make && cd ../build && gcc -o "+outputPath+" "+
             cFilePath+" "+
-            "../src/runtime/runtime.c "+
-            "../src/runtime/allocator_impl.c "+
-            "../src/runtime/"+allocatorType+"_allocator.c "+
+            "../runtime/lib/libjblang_runtime.a "+
             allocatorFlag+" "+
-            "-I ../include/jblang/runtime "+
-            "-I ../include";
+            "-I ../runtime/include";
 
     return system(command.c_str())==0;
 }
@@ -67,16 +62,14 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Input file does not exist: "+inputFile);
         }
 
-        if (!fileExists("../include/jblang/runtime/runtime.h") || !fileExists("../src/runtime/runtime.c")) {
-            throw std::runtime_error("Runtime files not found in expected directories");
+        if (!fileExists("../runtime/include/runtime.h")) {
+            throw std::runtime_error("Runtime files not found in runtime/ directory");
         }
 
-        // Setup ANTLR
         std::ifstream stream;
         stream.open(inputFile);
         antlr4::ANTLRInputStream input(stream);
 
-        // Create lexer and parser
         JBLangLexer lexer(&input);
         antlr4::CommonTokenStream tokens(&lexer);
         JBLangParser parser(&tokens);
@@ -84,7 +77,6 @@ int main(int argc, char* argv[])
         std::string allocator_type = "reference_count";
         bool useRefCount = true;
 
-        // Parse and visit
         auto* tree = parser.program();
         std::unique_ptr<CodeGenerator> generator = std::make_unique<CCodeGenerator>(useRefCount);
         TranspilerVisitor visitor(std::move(generator));

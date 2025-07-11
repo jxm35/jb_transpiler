@@ -24,6 +24,8 @@ find_path(ANTLR4_INCLUDE_DIR
         REQUIRED
         )
 
+add_subdirectory(runtime)
+
 include_directories(
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_BINARY_DIR}
@@ -71,11 +73,6 @@ add_library(JBLangCore
         src/types/TypeSystem.cpp
         src/types/SymbolTable.cpp
         src/core/CompilerError.cpp
-        src/runtime/runtime.c
-        src/runtime/allocator_impl.c
-        src/runtime/reference_count_allocator.c
-        src/runtime/mark_sweep_allocator.c
-        src/runtime/simple_allocator.c
         )
 
 target_include_directories(JBLangCore
