@@ -1,0 +1,51 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#define NIL 0
+
+typedef struct link {
+  struct link* next;
+  int value;
+} link;
+
+bool is_nil(link* x) { return x==NULL; }
+
+link* cons(int car, link* cdr)
+{
+    link* new_link = new link;
+    new_link->next = cdr;
+    new_link->value = car;
+    return new_link;
+}
+
+void print_list(link* x)
+{
+    printf("[");
+    while (is_nil(x)!=true) {
+        printf("%d", x->value);
+        x = x->next;
+        if (is_nil(x)!=true) printf(", ");
+    }
+    printf("]\n");
+}
+
+int length(link* x, int acc)
+{
+    if (is_nil(x)) return acc;
+    else return length(x->next, acc+1);
+}
+
+link* reverse(link* x, link* acc)
+{
+    if (is_nil(x)) return acc;
+    else return reverse(x->next, cons(x->value, acc));
+}
+
+int main()
+{
+    link* my_list1 = cons(1, NIL);
+    link* my_list2 = cons(2, my_list1);
+
+    print_list(my_list2);
+}

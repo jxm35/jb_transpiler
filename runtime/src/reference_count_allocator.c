@@ -1,6 +1,7 @@
 #include "reference_count_allocator.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 static AllocatorStats stats = {0};
 
@@ -47,7 +48,9 @@ static void inc_ref_count(void* ptr, void* other)
         if (otherHeader->idx<3)
             otherHeader->to_free[otherHeader->idx++] = ptr;
     }
-    printf("inc %lld\n", header->count);
+#ifdef DEBUG
+    printf("(debug) inc %lld\n", header->count);
+#endif
 }
 
 static void dec_ref_count(void* ptr, size_t offset)
@@ -55,7 +58,9 @@ static void dec_ref_count(void* ptr, size_t offset)
     if (!ptr) return;
     RefcountHeader* header = (RefcountHeader*) ((char*) ptr-offset-sizeof(RefcountHeader));
     header->count--;
-    printf("dec %lld\n", header->count);
+#ifdef DEBUG
+    printf("(debug) dec %lld\n", header->count);
+#endif
     if (header->count==0) {
         for (int i = 0; i<header->idx; i++) {
             dec_ref_count(header->to_free[i], 0);

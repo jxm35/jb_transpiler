@@ -93,7 +93,7 @@ Type TypeSystem::translateType(const std::string& sourceType)
     else if (m_typedefs.find(baseType)!=m_typedefs.end()) {
         type = m_typedefs[baseType];
     }
-    else if (m_structs.find(baseType)!=m_typedefs.end()) {
+    else if (m_structs.find(baseType)!=m_structs.end()) {
         type = m_structs[baseType];
     }
     else {

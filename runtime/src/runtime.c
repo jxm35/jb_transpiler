@@ -10,7 +10,9 @@ void runtime_init(void)
     current_allocator = get_allocator_implementation();
     if (current_allocator) {
         current_allocator->init();
-        printf("Initialized runtime with %s\n", current_allocator->name);
+#ifdef DEBUG
+        printf("(debug) Initialized runtime with %s\n", current_allocator->name);
+#endif
     }
 }
 
@@ -18,7 +20,9 @@ void runtime_shutdown(void)
 {
     if (current_allocator) {
         current_allocator->shutdown();
+#ifdef DEBUG
         runtime_print_stats();
+#endif
         current_allocator = NULL;
     }
 }
@@ -30,7 +34,9 @@ void* runtime_alloc(size_t bytes)
 
 void runtime_scope_end()
 {
-    printf("scope ended\n");
+#ifdef DEBUG
+    printf("(debug) scope ended\n");
+#endif
 }
 
 const char* runtime_get_allocator_name(void)

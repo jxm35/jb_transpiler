@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -std=c99 -Iinclude
+CFLAGS = -Wall -std=c99 -Iinclude $(ALLOCATOR_FLAGS) $(DEBUG_FLAGS)
 AR = ar
 ARFLAGS = rcs
 
@@ -30,3 +30,12 @@ $(LIBDIR):
 
 clean:
 	rm -rf $(OBJDIR) $(LIBDIR)
+
+simple:
+	$(MAKE) ALLOCATOR_FLAGS="" DEBUG_FLAGS="$(if $(DEBUG),-DDEBUG,)"
+
+reference_count:
+	$(MAKE) ALLOCATOR_FLAGS="-DUSE_REF_COUNT" DEBUG_FLAGS="$(if $(DEBUG),-DDEBUG,)"
+
+mark_sweep:
+	$(MAKE) ALLOCATOR_FLAGS="-DUSE_MARK_SWEEP" DEBUG_FLAGS="$(if $(DEBUG),-DDEBUG,)"

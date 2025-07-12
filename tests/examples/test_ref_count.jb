@@ -1,0 +1,97 @@
+#include <stdio.h>
+
+#define NIL 0
+
+typedef struct Node {
+  int value;
+  struct Node* child;
+} Node;
+
+typedef struct Container {
+  Node* primary;
+  Node* backup;
+} Container;
+
+Node* create_node(int val)
+{
+    Node* n = new Node;
+    n->value = val;
+    n->child = NIL;
+    return n;
+}
+
+void test_basic_sharing()
+{
+    printf("=== Basic Pointer Sharing Test ===\n");
+
+    Node* shared = create_node(42);
+
+    Node* ref1 = shared;  // Should increment ref count
+    Node* ref2 = shared;  // Should increment ref count again
+
+    printf("Shared node value: %d\n", shared->value);
+    printf("Ref1 value: %d\n", ref1->value);
+    printf("Ref2 value: %d\n", ref2->value);
+
+    ref1 = create_node(100);  // Should decrement shared's ref count
+    printf("After reassignment, ref1 value: %d\n", ref1->value);
+
+    printf("Shared still: %d\n", shared->value);
+}
+
+void test_nested_structures()
+{
+    printf("\n=== Nested Structure Test ===\n");
+
+    Node* parent = create_node(1);
+    Node* child = create_node(2);
+
+    parent->child = child;  // Should increment child's ref count
+
+    printf("Parent: %d, Child: %d\n", parent->value, parent->child->value);
+
+    Node* parent2 = create_node(3);
+    parent2->child = child;  // Should increment child's ref count again
+
+    printf("Parent2: %d, Shared child: %d\n", parent2->value, parent2->child->value);
+
+    parent->child = NIL;  // Should decrement child's ref count
+
+    printf("After nullifying parent->child, parent2 child still: %d\n",
+            parent2->child->value);
+}
+
+void test_container_patterns()
+{
+    printf("\n=== Container Pattern Test ===\n");
+
+    Container* box = new Container;
+    Node* important_data = create_node(999);
+
+    box->primary = important_data;  // Inc ref
+    box->backup = important_data;   // Inc ref again
+
+    printf("Primary: %d, Backup: %d\n",
+            box->primary->value, box->backup->value);
+
+    box->primary = NIL;  // Dec ref, but backup still holds it
+
+    printf("After removing primary, backup still: %d\n", box->backup->value);
+
+    box->primary = create_node(777);
+    printf("New primary: %d, Backup: %d\n",
+            box->primary->value, box->backup->value);
+}
+
+int main()
+{
+    printf("Reference Counting Test Program\n");
+    printf("===============================\n");
+
+    test_basic_sharing();
+    test_nested_structures();
+    test_container_patterns();
+
+    printf("\n=== Test Complete ===\n");
+    return 0;
+}
