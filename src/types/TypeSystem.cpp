@@ -46,7 +46,7 @@ std::string Type::toString() const
 {
     std::string str;
     if (this->isStruct()) {
-        str = this->getStructName();
+        str = "struct "+this->getStructName();
     }
     else {
         str = baseTypeToString(this->m_baseType);

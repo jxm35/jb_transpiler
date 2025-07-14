@@ -77,4 +77,5 @@ private:
     std::stringstream m_output;
     int m_tempVarCounter;
     bool addRefCounts;
+    Type resolveTypeFromContext(JBLangParser::TypeSpecContext* ctx);
 };

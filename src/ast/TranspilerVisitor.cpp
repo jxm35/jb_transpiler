@@ -24,7 +24,7 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
 
 Type TranspilerVisitor::getArrayFromCode(JBLangParser::ArrayDeclContext* ctx)
 {
-    Type type = m_typeSystem->resolveType(ctx->typeSpec()->getText());
+    Type type = resolveTypeFromContext(ctx->typeSpec());  // CHANGED
     std::vector<int> sizes;
     sizes.reserve(ctx->arraySize().size());
     for (auto size : ctx->arraySize()) {
@@ -57,7 +57,7 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
                 paramName = paramType.getArrayName();
             }
             else {
-                paramType = m_typeSystem->resolveType(param->typeSpec()->getText());
+                paramType = resolveTypeFromContext(param->typeSpec());  // CHANGED
                 paramName = param->IDENTIFIER()->getText();
             }
             func->params.emplace_back(paramName, paramType);
@@ -65,8 +65,8 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
     }
 
     // Handle return type
-    func->returnType = ctx->typeSpec() ? m_typeSystem->resolveType(ctx->typeSpec()->getText()) : Type(
-            Type::BaseType::Void);
+    func->returnType = ctx->typeSpec() ? resolveTypeFromContext(ctx->typeSpec()) : Type(
+            Type::BaseType::Void);  // CHANGED
 
     m_typeSystem->registerFunction(func);
     m_symbolTable->currentFunc = func;
@@ -89,7 +89,7 @@ antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext* ctx)
         }
         else {
             varName = ctx->IDENTIFIER()->getText();
-            varType = m_typeSystem->resolveType(ctx->typeSpec()->getText());
+            varType = resolveTypeFromContext(ctx->typeSpec());  // CHANGED
         }
         if (ctx->expression()) {
             auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
@@ -336,12 +336,11 @@ Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext* ctx)
         }
         else {
             members.emplace_back(member->IDENTIFIER()->getText(),
-                    m_typeSystem->resolveType(member->typeSpec()->getText()));
+                    resolveTypeFromContext(member->typeSpec()));  // CHANGED
         }
     }
 
     return m_typeSystem->setStructMembers(structName, members);
-
 }
 
 antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext* ctx)
@@ -400,8 +399,8 @@ antlrcpp::Any TranspilerVisitor::visitDereferenceExpr(JBLangParser::DereferenceE
 
 antlrcpp::Any TranspilerVisitor::visitTypedefDecl(JBLangParser::TypedefDeclContext* ctx)
 {
-    Type type = ctx->structDecl() ? getStructFromCode(ctx->structDecl()) : m_typeSystem->resolveType(
-            ctx->typeSpec()->getText());
+    Type type = ctx->structDecl() ? getStructFromCode(ctx->structDecl()) : resolveTypeFromContext(
+            ctx->typeSpec());  // CHANGED
     m_typeSystem->registerTypeDef(ctx->IDENTIFIER()->getText(), type);
     m_output << m_codeGen->generateTypeDef(ctx->IDENTIFIER()->getText(), type);
 
@@ -417,7 +416,7 @@ antlrcpp::Any TranspilerVisitor::visitArrayAccessExpr(JBLangParser::ArrayAccessE
 
 antlrcpp::Any TranspilerVisitor::visitNewExpr(JBLangParser::NewExprContext* ctx)
 {
-    return m_codeGen->generateAlloc(m_typeSystem->resolveType(ctx->typeSpec()->getText()));
+    return m_codeGen->generateAlloc(resolveTypeFromContext(ctx->typeSpec()));  // CHANGED
 }
 
 antlrcpp::Any TranspilerVisitor::visitArrayDecl(JBLangParser::ArrayDeclContext* ctx)
@@ -450,4 +449,29 @@ antlrcpp::Any TranspilerVisitor::visitInitializerList(JBLangParser::InitializerL
         code += indentLevel+"."+initializer->IDENTIFIER()->getText()+" = "+assignExpr+",\n";
     }
     return code;
+}
+
+Type TranspilerVisitor::resolveTypeFromContext(JBLangParser::TypeSpecContext* ctx)
+{
+    if (!ctx) return Type(Type::BaseType::Void);
+
+    std::string typeText = ctx->getText();
+
+    if (typeText.substr(0, 6)=="struct") {
+        std::string structName = typeText.substr(6);
+
+        bool isPointer = false;
+        if (!structName.empty() && structName.back()=='*') {
+            isPointer = true;
+            structName = structName.substr(0, structName.length()-1);
+        }
+
+        Type structType = m_typeSystem->resolveType(structName);
+        if (isPointer) {
+            structType.setPointer(true);
+        }
+        return structType;
+    }
+
+    return m_typeSystem->resolveType(typeText);
 }
