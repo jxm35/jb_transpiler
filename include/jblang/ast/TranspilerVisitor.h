@@ -44,6 +44,7 @@ public:
     antlrcpp::Any visitExprStmt(JBLangParser::ExprStmtContext* ctx) override;
     antlrcpp::Any visitIfStmt(JBLangParser::IfStmtContext* ctx) override;
     antlrcpp::Any visitWhileStmt(JBLangParser::WhileStmtContext* ctx) override;
+    antlrcpp::Any visitForStmt(JBLangParser::ForStmtContext* ctx) override;
 
     // Expressions
     antlrcpp::Any visitPrimary(JBLangParser::PrimaryContext* ctx) override;
@@ -60,6 +61,10 @@ public:
     antlrcpp::Any visitArrayAccessExpr(JBLangParser::ArrayAccessExprContext* ctx) override;
     antlrcpp::Any visitNewExpr(JBLangParser::NewExprContext* ctx) override;
     antlrcpp::Any visitStructInitExpr(JBLangParser::StructInitExprContext* ctx) override;
+    antlrcpp::Any visitPostIncrementExpr(JBLangParser::PostIncrementExprContext* ctx) override;
+    antlrcpp::Any visitPostDecrementExpr(JBLangParser::PostDecrementExprContext* ctx) override;
+    antlrcpp::Any visitPreIncrementExpr(JBLangParser::PreIncrementExprContext* ctx) override;
+    antlrcpp::Any visitPreDecrementExpr(JBLangParser::PreDecrementExprContext* ctx) override;
     antlrcpp::Any visitInitializerList(JBLangParser::InitializerListContext* ctx) override;
     antlrcpp::Any visitFunctionCall(JBLangParser::FunctionCallContext* ctx) override;
 

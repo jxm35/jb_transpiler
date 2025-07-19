@@ -27,12 +27,35 @@ std::string CCodeGenerator::generateVarDecl(const std::string& name, const Type&
 std::string CCodeGenerator::generateStructDecl(const std::string& name, const Type& type,
         const std::string& initializer)
 {
-    std::string structDecl = "struct "+name+"{\n";
+    std::string structDecl = "struct "+name+" {\n";
     for (const auto& member : type.getStructMembers()) {
-        structDecl += "\t"+member.second.toString()+
-                (member.second.isArray() ? "" : ("\t"+member.first))+";\n";
+        structDecl += "\t";
+
+        if (member.second.isArray()) {
+            Type baseType = member.second;
+            std::string baseTypeStr;
+
+            if (baseType.isStruct()) {
+                baseTypeStr = "struct "+baseType.getStructName();
+            }
+            else {
+                baseTypeStr = Type::baseTypeToString(baseType.getBaseType());
+            }
+            if (baseType.isPointer()) {
+                baseTypeStr += "*";
+            }
+            structDecl += baseTypeStr+" "+member.first;
+            for (int size : baseType.getArraySizes()) {
+                structDecl += "["+std::to_string(size)+"]";
+            }
+        }
+        else {
+            structDecl += member.second.toString()+" "+member.first;
+        }
+        structDecl += ";\n";
     }
-    return structDecl+"}\n";
+    structDecl += "}";
+    return structDecl;
 }
 
 std::string CCodeGenerator::generateTypeDef(const std::string& name, const Type& type)

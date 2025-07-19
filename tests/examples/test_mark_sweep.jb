@@ -9,11 +9,7 @@ typedef struct Node {
 } Node;
 
 typedef struct Graph {
-  Node* node1;
-  Node* node2;
-  Node* node3;
-  Node* node4;
-  Node* node5;
+  Node* nodes[5];
   int count;
 } Graph;
 
@@ -138,11 +134,8 @@ void test_gc_threshold()
     Node* keeper = create_node(42);
     printf("Created keeper: %d\n", keeper->value);
 
-    // Allocate and abandon many nodes to trigger GC
-    int i = 0;
-    while (i<50) {
+    for (int i = 0; i<50; i++) {
         Node* temp = create_node(i);
-        i = i+1;
     }
 
     printf("Allocated and abandoned 50 temporary nodes\n");
@@ -151,35 +144,6 @@ void test_gc_threshold()
     runtime_gc();
     printf("Final GC completed\n");
 }
-
-//void demonstrate_conservative_scanning()
-//{
-//    printf("\n=== Conservative Stack Scanning Demo ===\n");
-//
-//    // Create node and store pointer in local variable
-//    Node* local_ptr = create_node(777);
-//    printf("Created node with local pointer: %d\n", local_ptr->value);
-//
-//    // Create some stack noise (other local variables)
-//    int dummy1 = 111;
-//    int dummy2 = 222;
-//    char buffer[64] = "stack data";
-//
-//    printf("Added stack noise: %d, %d, %s\n", dummy1, dummy2, buffer);
-//
-//    // The conservative scanner should find local_ptr on the stack
-//    runtime_gc();
-//    printf("GC completed - node should survive (found via stack scan)\n");
-//    printf("Node still accessible: %d\n", local_ptr->value);
-//
-//    // Clear the pointer
-//    local_ptr = NIL;
-//
-//    printf("Cleared local pointer\n");
-//    runtime_gc();
-//    printf("GC completed - node should be collected now\n");
-//}
-
 int main()
 {
     printf("Mark-Sweep Garbage Collector Test Program\n");
@@ -189,7 +153,6 @@ int main()
     test_reachable_cycles();
     test_partial_structures();
     test_gc_threshold();
-//    demonstrate_conservative_scanning();
 
     printf("\n=== All Tests Complete ===\n");
     return 0;

@@ -180,6 +180,65 @@ antlrcpp::Any TranspilerVisitor::visitExprStmt(JBLangParser::ExprStmtContext* ct
     return nullptr;
 }
 
+antlrcpp::Any TranspilerVisitor::visitForStmt(JBLangParser::ForStmtContext* ctx)
+{
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+
+    m_output << indentLevel << "for (";
+
+    if (ctx->varDecl()) {
+        std::string varName;
+        Type varType;
+        if (ctx->varDecl()->arrayDecl()) {
+            varType = getArrayFromCode(ctx->varDecl()->arrayDecl());
+            varName = varType.getArrayName();
+        }
+        else {
+            varName = ctx->varDecl()->IDENTIFIER()->getText();
+            varType = resolveTypeFromContext(ctx->varDecl()->typeSpec());
+        }
+
+        m_output << varType.toString() << " " << varName;
+        if (ctx->varDecl()->expression()) {
+            auto initExpr = std::any_cast<std::string>(visit(ctx->varDecl()->expression()));
+            m_output << " = " << initExpr;
+        }
+
+        m_symbolTable->addSymbol(varName, varType);
+    }
+    else if (ctx->exprStmt()) {
+        auto exprStr = std::any_cast<std::string>(visit(ctx->exprStmt()->expression()));
+        m_output << exprStr;
+    }
+
+    m_output << "; ";
+
+    if (ctx->expression().size()>=1 && ctx->expression(0)) {
+        this->addRefCounts = false;
+        m_output << std::any_cast<std::string>(visit(ctx->expression(0)));
+        this->addRefCounts = true;
+    }
+
+    m_output << "; ";
+
+    if (ctx->expression().size()>=2 && ctx->expression(1)) {
+        m_output << std::any_cast<std::string>(visit(ctx->expression(1)));
+    }
+
+    m_output << ") ";
+
+    if (auto blockCtx = dynamic_cast<JBLangParser::BlockContext*>(ctx->statement())) {
+        visit(blockCtx);
+    }
+    else {
+        m_output << "{\n";
+        visit(ctx->statement());
+        m_output << indentLevel << "}\n";
+    }
+
+    return nullptr;
+}
+
 antlrcpp::Any TranspilerVisitor::visitPrimary(JBLangParser::PrimaryContext* ctx)
 {
     if (ctx->expression()) {
@@ -433,6 +492,30 @@ antlrcpp::Any TranspilerVisitor::visitStructInitExpr(JBLangParser::StructInitExp
     code += std::any_cast<std::string>(visit(ctx->initializerList()));
 
     return code+m_symbolTable->getIndentLevel()+"}";
+}
+
+antlrcpp::Any TranspilerVisitor::visitPostIncrementExpr(JBLangParser::PostIncrementExprContext* ctx)
+{
+    std::string expr = std::any_cast<std::string>(visit(ctx->expression()));
+    return expr+"++";
+}
+
+antlrcpp::Any TranspilerVisitor::visitPostDecrementExpr(JBLangParser::PostDecrementExprContext* ctx)
+{
+    std::string expr = std::any_cast<std::string>(visit(ctx->expression()));
+    return expr+"--";
+}
+
+antlrcpp::Any TranspilerVisitor::visitPreIncrementExpr(JBLangParser::PreIncrementExprContext* ctx)
+{
+    std::string expr = std::any_cast<std::string>(visit(ctx->expression()));
+    return "++"+expr;
+}
+
+antlrcpp::Any TranspilerVisitor::visitPreDecrementExpr(JBLangParser::PreDecrementExprContext* ctx)
+{
+    std::string expr = std::any_cast<std::string>(visit(ctx->expression()));
+    return "--"+expr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitInitializerList(JBLangParser::InitializerListContext* ctx)

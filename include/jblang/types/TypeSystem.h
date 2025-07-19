@@ -47,7 +47,7 @@ public:
     {
         return m_structMembers;
     }
-
+    static std::string baseTypeToString(BaseType type);
     std::string toString() const;
 
     void setPointer(bool isPtr) noexcept { m_isPointer = isPtr; }
@@ -64,6 +64,11 @@ public:
     void setStructMembers(std::vector<std::pair<std::string, Type>> members)
     {
         m_structMembers = std::move(members);
+    }
+
+    const std::vector<int>& getArraySizes() const noexcept
+    {
+        return m_arrayInfo.sizes;
     }
 
 private:

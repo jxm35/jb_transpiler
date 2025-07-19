@@ -28,8 +28,7 @@ std::string Function::getSignature() const
     return signature+")";
 }
 
-namespace {
-std::string baseTypeToString(Type::BaseType type)
+std::string Type::baseTypeToString(Type::BaseType type)
 {
     switch (type) {
     case Type::BaseType::Void: return "void";
@@ -37,9 +36,8 @@ std::string baseTypeToString(Type::BaseType type)
     case Type::BaseType::String: return "char*";
     case Type::BaseType::Bool: return "bool";
     case Type::BaseType::Struct: return "struct";
-    default:throw CompilerError(CompilerError::ErrorType::TypeError, "unknown base type");
+    default: throw CompilerError(CompilerError::ErrorType::TypeError, "unknown base type");
     }
-}
 }
 
 std::string Type::toString() const

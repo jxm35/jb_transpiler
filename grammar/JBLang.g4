@@ -20,15 +20,20 @@ statement
     | structDecl
     | ifStmt
     | whileStmt
-    | typedefDecl    // Add this
+    | forStmt
+    | typedefDecl
     ;
 
 typedefDecl
     : 'typedef' (typeSpec | structDecl) IDENTIFIER ';'
     ;
 
+forStmt
+    : 'for' '(' (varDecl | exprStmt | ';') expression? ';' expression? ')' statement
+    ;
+
 functionDecl
-    : typeSpec IDENTIFIER '(' paramList? ')' block  // C-style: return type before function name
+    : typeSpec IDENTIFIER '(' paramList? ')' block
     ;
 
 paramList
@@ -36,7 +41,7 @@ paramList
     ;
 
 param
-    : ((typeSpec IDENTIFIER) | arrayDecl)  // C-style: type before parameter name
+    : ((typeSpec IDENTIFIER) | arrayDecl)
     ;
 
 typeSpec
@@ -44,7 +49,7 @@ typeSpec
     | 'int'
     | 'bool'
     | 'string'
-    | 'struct'? IDENTIFIER        // For struct types
+    | 'struct'? IDENTIFIER
     | typeSpec '*'
     ;
 
@@ -61,11 +66,11 @@ structMember
     ;
 
 varDecl
-    : ((typeSpec IDENTIFIER) | arrayDecl) ('=' expression)? ';'  // C-style: type before variable name
+    : ((typeSpec IDENTIFIER) | arrayDecl) ('=' expression)? ';'
     ;
 
 spawnStmt
-    : 'spawn' expression ';'  // Kept for concurrent execution
+    : 'spawn' expression ';'
     ;
 
 returnStmt
@@ -104,6 +109,10 @@ expression
     | '*' expression                               # DereferenceExpr
     | expression '[' expression ']'                 # ArrayAccessExpr
     | '{' initializerList? '}'                         # StructInitExpr
+    | expression '++'                              # PostIncrementExpr
+    | expression '--'                              # PostDecrementExpr
+    | '++' expression                              # PreIncrementExpr
+    | '--' expression                              # PreDecrementExpr
     ;
 
 initializerList
