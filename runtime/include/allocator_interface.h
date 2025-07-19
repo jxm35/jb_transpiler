@@ -16,6 +16,7 @@ typedef struct {
   void (* inc_ref_count)(void* ptr, void* other);
   void (* dec_ref_count)(void* ptr, size_t offset);
   void (* set_gc_threshold)(size_t threshold);
+  void (* register_root)(void *ptr);
 } RuntimeAllocator;
 
 const RuntimeAllocator* get_allocator_implementation(void);

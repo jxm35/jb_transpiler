@@ -49,12 +49,16 @@ void runtime_gc(void)
     }
 }
 
-
 void runtime_set_gc_threshold(size_t threshold) {
     if (current_allocator && current_allocator->set_gc_threshold) {
         current_allocator->set_gc_threshold(threshold);
     }
+}
 
+void runtime_register_root(void* ptr) {
+    if (current_allocator && current_allocator->register_root) {
+        current_allocator->register_root(ptr);
+    }
 }
 
 const char* runtime_get_allocator_name(void)

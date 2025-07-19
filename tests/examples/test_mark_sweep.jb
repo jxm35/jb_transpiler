@@ -144,6 +144,20 @@ void test_gc_threshold()
     runtime_gc();
     printf("Final GC completed\n");
 }
+
+Node* global_node = NIL;
+
+void test_globals()
+{
+    global_node = create_node(99);
+    printf("Global node addr: %p\n", &global_node);
+    runtime_gc();
+    printf("Global node has not been collected: %d\n", global_node->value);
+    global_node = NIL;
+    // global node should be freed now
+    runtime_gc();
+}
+
 int main()
 {
     printf("Mark-Sweep Garbage Collector Test Program\n");
@@ -153,6 +167,7 @@ int main()
     test_reachable_cycles();
     test_partial_structures();
     test_gc_threshold();
+    test_globals();
 
     printf("\n=== All Tests Complete ===\n");
     return 0;

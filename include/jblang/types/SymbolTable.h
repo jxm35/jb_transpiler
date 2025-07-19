@@ -24,7 +24,10 @@ public:
 
 class SymbolTable {
 public:
-    SymbolTable() = default;
+    SymbolTable()
+    {
+        scopes.emplace_back();
+    }
     ~SymbolTable() = default;
 
     SymbolTable(const SymbolTable&) = delete;
@@ -87,6 +90,9 @@ public:
         static const std::map<std::string, Variable> empty;
         return scopes.empty() ? empty : scopes.back().symbols;
     }
+    bool isGlobalScope() const { return scopes.size()==1; }
+
+    std::vector<std::pair<std::string, Type>> globalVars;
 
     std::shared_ptr<Function> currentFunc;
 

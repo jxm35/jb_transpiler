@@ -7,6 +7,9 @@
 #include <stdio.h>
 
 static void* stack_bottom = NULL;
+static const size_t MAX_ROOTS = 50;
+static void** roots[MAX_ROOTS]; // Just for globals, which can't be found via stack scan
+static int root_index = 0;
 
 static size_t GC_THRESHOLD = 1024*1024; // 1mb
 
@@ -19,6 +22,15 @@ typedef struct MSHeader {
 
 static MSHeader* allocation_list = NULL;
 static AllocatorStats stats = {0};
+
+static void ms_register_root(void* ptr)
+{
+    if (root_index>=MAX_ROOTS) {
+        printf("Maximum registered roots exceeded.");
+        exit(1);
+    }
+    roots[root_index++] = (void**) ptr;
+}
 
 static void add_allocation(MSHeader* header)
 {
@@ -122,6 +134,11 @@ static void mark_phase(void)
     }
 
     conservative_scan_stack();
+    for (int i = 0; i<root_index; i++) {
+        if (is_valid_pointer(*roots[i])) {
+            mark(*roots[i]);
+        }
+    }
 }
 
 static void sweep_phase(void)
@@ -258,7 +275,8 @@ static const RuntimeAllocator mark_sweep_allocator = {
         .shutdown = ms_shutdown,
         .inc_ref_count = NULL,
         .dec_ref_count = NULL,
-        .set_gc_threshold = ms_set_gc_threshold
+        .set_gc_threshold = ms_set_gc_threshold,
+        .register_root = ms_register_root
 };
 
 const RuntimeAllocator* get_mark_sweep_allocator(void)
