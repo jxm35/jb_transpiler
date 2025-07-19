@@ -36,6 +36,7 @@ std::string Type::baseTypeToString(Type::BaseType type)
     case Type::BaseType::String: return "char*";
     case Type::BaseType::Bool: return "bool";
     case Type::BaseType::Struct: return "struct";
+    case Type::BaseType::Class: return "struct";
     default: throw CompilerError(CompilerError::ErrorType::TypeError, "unknown base type");
     }
 }
@@ -43,7 +44,7 @@ std::string Type::baseTypeToString(Type::BaseType type)
 std::string Type::toString() const
 {
     std::string str;
-    if (this->isStruct()) {
+    if (this->isStruct() || this->isClass()) {
         str = "struct "+this->getStructName();
     }
     else {
@@ -93,6 +94,9 @@ Type TypeSystem::translateType(const std::string& sourceType)
     }
     else if (m_structs.find(baseType)!=m_structs.end()) {
         type = m_structs[baseType];
+    }
+    else if (m_classes.find(baseType)!=m_classes.end()) {
+        type = m_classes[baseType];
     }
     else {
         throw std::runtime_error("Unknown type: "+sourceType);
@@ -147,4 +151,51 @@ void TypeSystem::registerFunction(std::shared_ptr<Function> func)
         throw CompilerError(CompilerError::ErrorType::Other, "Cannot register null function");
     }
     m_funcs[func->name] = std::move(func);
+}
+
+Type TypeSystem::registerClass(const std::string& name)
+{
+    Type type(Type::BaseType::Class);
+    type.setStruct(name);
+    m_classes[name] = type;
+    return type;
+}
+
+Type TypeSystem::setClassMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members)
+{
+    auto it = m_classes.find(name);
+    if (it==m_classes.end()) {
+        throw CompilerError(CompilerError::ErrorType::TypeError, "Class not found: "+name);
+    }
+    Type& type = it->second;
+    type.setStructMembers(std::move(members));
+    return type;
+}
+
+void TypeSystem::registerClassMethod(const std::string& className, std::shared_ptr<Function> method)
+{
+    if (!method) {
+        throw CompilerError(CompilerError::ErrorType::Other, "Cannot register null method");
+    }
+    m_classMethods[className].push_back(std::move(method));
+}
+
+std::vector<std::shared_ptr<Function>> TypeSystem::getClassMethods(const std::string& className) const
+{
+    auto it = m_classMethods.find(className);
+    return it!=m_classMethods.end() ? it->second : std::vector<std::shared_ptr<Function>>{};
+}
+
+void TypeSystem::registerClassConstructor(const std::string& className, std::shared_ptr<Function> constructor)
+{
+    if (!constructor) {
+        throw CompilerError(CompilerError::ErrorType::Other, "Cannot register null constructor");
+    }
+    m_classConstructors[className] = std::move(constructor);
+}
+
+std::shared_ptr<Function> TypeSystem::getClassConstructor(const std::string& className) const
+{
+    auto it = m_classConstructors.find(className);
+    return it!=m_classConstructors.end() ? it->second : nullptr;
 }

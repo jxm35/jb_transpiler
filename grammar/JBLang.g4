@@ -18,6 +18,7 @@ statement
     | exprStmt
     | block
     | structDecl
+    | classDecl
     | ifStmt
     | whileStmt
     | forStmt
@@ -26,6 +27,16 @@ statement
 
 typedefDecl
     : 'typedef' (typeSpec | structDecl) IDENTIFIER ';'
+    ;
+
+classDecl
+    : 'class' IDENTIFIER '{' classMember* '}' ';'?
+    ;
+
+classMember
+    : ((typeSpec IDENTIFIER) | arrayDecl) ';'     # ClassField
+    | typeSpec IDENTIFIER '(' paramList? ')' block # ClassMethod
+    | IDENTIFIER '(' paramList? ')' block          # ClassConstructor
     ;
 
 forStmt
@@ -49,7 +60,7 @@ typeSpec
     | 'int'
     | 'bool'
     | 'string'
-    | 'struct'? IDENTIFIER
+    | ('struct'|'class')? IDENTIFIER
     | typeSpec '*'
     ;
 
@@ -104,10 +115,12 @@ expression
     | IDENTIFIER                                    # VarExpr
     | literal                                       # LiteralExpr
     | 'new' typeSpec                                # NewExpr
+    | 'new' IDENTIFIER '(' argumentList? ')'       # NewWithConstructorExpr
     | expression '->' IDENTIFIER                    # PointerMemberExpr
     | '&' expression                               # AddressOfExpr
     | '*' expression                               # DereferenceExpr
     | expression '[' expression ']'                 # ArrayAccessExpr
+    | expression '->' IDENTIFIER '(' argumentList? ')' # MethodCallExpr
     | '{' initializerList? '}'                         # StructInitExpr
     | expression '++'                              # PostIncrementExpr
     | expression '--'                              # PostDecrementExpr

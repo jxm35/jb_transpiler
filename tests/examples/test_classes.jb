@@ -1,0 +1,42 @@
+#include <stdio.h>
+
+class Point {
+    int x;
+    int y;
+
+    Point(int nx, int ny)
+    {
+        this->x = nx;
+        this->y = ny;
+    }
+
+    void print()
+    {
+        printf("Point(%d, %d)\n", this->x, this->y);
+    }
+
+    int distance_squared()
+    {
+        return this->x*this->x+this->y*this->y;
+    }
+
+    void move(int dx, int dy)
+    {
+        this->x = this->x+dx;
+        this->y = this->y+dy;
+    }
+};
+
+int main()
+{
+    Point* p = new Point(3, 4);
+    p->print();
+
+    int dist = p->distance_squared();
+    printf("Distance squared: %d\n", dist);
+
+    p->move(1, 1);
+    p->print();
+
+    return 0;
+}

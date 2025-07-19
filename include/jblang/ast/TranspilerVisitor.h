@@ -34,6 +34,11 @@ public:
     antlrcpp::Any visitFunctionDecl(JBLangParser::FunctionDeclContext* ctx) override;
     antlrcpp::Any visitVarDecl(JBLangParser::VarDeclContext* ctx) override;
     antlrcpp::Any visitStructDecl(JBLangParser::StructDeclContext* ctx) override;
+    antlrcpp::Any visitClassDecl(JBLangParser::ClassDeclContext* ctx) override;
+    antlrcpp::Any visitClassField(JBLangParser::ClassFieldContext* ctx) override;
+    antlrcpp::Any visitClassMethod(JBLangParser::ClassMethodContext* ctx) override;
+    antlrcpp::Any visitClassConstructor(JBLangParser::ClassConstructorContext* ctx) override;
+    antlrcpp::Any visitNewWithConstructorExpr(JBLangParser::NewWithConstructorExprContext* ctx) override;
     antlrcpp::Any visitTypedefDecl(JBLangParser::TypedefDeclContext* ctx) override;
     antlrcpp::Any visitArrayDecl(JBLangParser::ArrayDeclContext* ctx) override;
 
@@ -56,6 +61,7 @@ public:
     antlrcpp::Any visitCompareExpr(JBLangParser::CompareExprContext* ctx) override;
     antlrcpp::Any visitAssignExpr(JBLangParser::AssignExprContext* ctx) override;
     antlrcpp::Any visitPointerMemberExpr(JBLangParser::PointerMemberExprContext* ctx) override;
+    antlrcpp::Any visitMethodCallExpr(JBLangParser::MethodCallExprContext* ctx) override;
     antlrcpp::Any visitAddressOfExpr(JBLangParser::AddressOfExprContext* ctx) override;
     antlrcpp::Any visitDereferenceExpr(JBLangParser::DereferenceExprContext* ctx) override;
     antlrcpp::Any visitArrayAccessExpr(JBLangParser::ArrayAccessExprContext* ctx) override;
@@ -72,6 +78,7 @@ public:
     antlrcpp::Any visitLiteral(JBLangParser::LiteralContext* ctx) override;
 
     Type getStructFromCode(JBLangParser::StructDeclContext* ctx);
+    Type getClassFromCode(JBLangParser::ClassDeclContext* ctx);
     Type getArrayFromCode(JBLangParser::ArrayDeclContext* ctx);
 
 private:

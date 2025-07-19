@@ -17,6 +17,7 @@ public:
       String,
       Bool,
       Struct,
+      Class,
       NO_TYPE
     };
 
@@ -39,6 +40,8 @@ public:
     bool isConst() const noexcept { return m_isConst; }
     bool isArray() const noexcept { return m_arrayInfo.isArray; }
     bool isStruct() const noexcept { return m_baseType==BaseType::Struct; }
+    bool isClass() const noexcept { return m_baseType==BaseType::Class; }
+    const std::string& getClassName() const noexcept { return m_structName; }
 
     BaseType getBaseType() const noexcept { return m_baseType; }
     const std::string& getStructName() const noexcept { return m_structName; }
@@ -115,7 +118,13 @@ public:
     }
 
     Type registerStruct(const std::string& name);
+    Type registerClass(const std::string& name);
     Type setStructMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members);
+    Type setClassMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members);
+    void registerClassMethod(const std::string& className, std::shared_ptr<Function> method);
+    void registerClassConstructor(const std::string& className, std::shared_ptr<Function> constructor);
+    std::shared_ptr<Function> getClassConstructor(const std::string& className) const;
+    std::vector<std::shared_ptr<Function>> getClassMethods(const std::string& className) const;
     void registerTypeDef(const std::string& name, Type type);
     void registerFunction(std::shared_ptr<Function> func);
 
@@ -146,6 +155,9 @@ private:
     std::map<std::string, std::shared_ptr<Function>> m_funcs;
     std::map<std::string, std::string> m_defines;
     std::map<std::string, Type> m_structs;
+    std::map<std::string, Type> m_classes;
+    std::map<std::string, std::vector<std::shared_ptr<Function>>> m_classMethods;
+    std::map<std::string, std::shared_ptr<Function>> m_classConstructors;
 
     Type translateType(const std::string& sourceType);
 };

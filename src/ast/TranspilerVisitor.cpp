@@ -337,6 +337,16 @@ antlrcpp::Any TranspilerVisitor::visitFunctionCall(JBLangParser::FunctionCallCon
     std::string indentLevel = m_symbolTable->getIndentLevel();
     bool pointerArgs = false;
 
+    std::string funcName = ctx->IDENTIFIER()->getText();
+    if (funcName.find("METHOD_CALL:")==0) {
+        size_t firstColon = funcName.find(':', 12);
+        size_t secondColon = funcName.find(':', firstColon+1);
+        std::string methodName = funcName.substr(12, firstColon-12);
+        std::string objName = funcName.substr(secondColon+1);
+
+        args.push_back(objName);
+    }
+
     if (ctx->argumentList()) {
         args.reserve(ctx->argumentList()->expression().size());
         for (auto arg : ctx->argumentList()->expression()) {
@@ -413,6 +423,180 @@ antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext
     Type structType = getStructFromCode(ctx);
 
     m_output << m_codeGen->generateStructDecl(structType.getStructName(), structType);
+    return nullptr;
+}
+
+Type TranspilerVisitor::getClassFromCode(JBLangParser::ClassDeclContext* ctx)
+{
+    std::string className = ctx->IDENTIFIER()->getText();
+    m_typeSystem->registerClass(className);
+
+    std::vector<std::pair<std::string, Type>> fields;
+
+    for (auto member : ctx->classMember()) {
+        if (auto fieldCtx = dynamic_cast<JBLangParser::ClassFieldContext*>(member)) {
+            if (fieldCtx->arrayDecl()) {
+                Type type = this->getArrayFromCode(fieldCtx->arrayDecl());
+                fields.emplace_back(type.getArrayName(), type);
+            }
+            else {
+                fields.emplace_back(fieldCtx->IDENTIFIER()->getText(),
+                        resolveTypeFromContext(fieldCtx->typeSpec()));
+            }
+        }
+    }
+
+    return m_typeSystem->setClassMembers(className, fields);
+}
+
+antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* ctx)
+{
+    Type classType = getClassFromCode(ctx);
+    std::string className = classType.getClassName();
+
+    m_output << m_codeGen->generateStructDecl(className, classType) << ";\n";
+
+    for (auto member : ctx->classMember()) {
+        if (auto constructorCtx = dynamic_cast<JBLangParser::ClassConstructorContext*>(member)) {
+            auto constructor = std::make_shared<Function>();
+            constructor->name = className+"_"+className;
+            constructor->returnType = Type(Type::BaseType::Void);
+
+            Type thisType = classType;
+            thisType.setPointer(true);
+            constructor->params.emplace_back("this", thisType);
+
+            if (constructorCtx->paramList()) {
+                for (auto param : constructorCtx->paramList()->param()) {
+                    Type paramType;
+                    std::string paramName;
+                    if (param->arrayDecl()) {
+                        paramType = this->getArrayFromCode(param->arrayDecl());
+                        paramName = paramType.getArrayName();
+                    }
+                    else {
+                        paramType = resolveTypeFromContext(param->typeSpec());
+                        paramName = param->IDENTIFIER()->getText();
+                    }
+                    constructor->params.emplace_back(paramName, paramType);
+                }
+            }
+
+            m_typeSystem->registerClassConstructor(className, constructor);
+            m_symbolTable->currentFunc = constructor;
+            m_output << m_codeGen->generateFunctionDecl(constructor);
+            visit(constructorCtx->block());
+            m_symbolTable->currentFunc = nullptr;
+        }
+        if (auto methodCtx = dynamic_cast<JBLangParser::ClassMethodContext*>(member)) {
+            auto method = std::make_shared<Function>();
+            method->name = className+"_"+methodCtx->IDENTIFIER()->getText();
+            method->returnType = resolveTypeFromContext(methodCtx->typeSpec());
+
+            Type thisType = classType;
+            thisType.setPointer(true);
+            method->params.emplace_back("this", thisType);
+
+            if (methodCtx->paramList()) {
+                for (auto param : methodCtx->paramList()->param()) {
+                    Type paramType;
+                    std::string paramName;
+                    if (param->arrayDecl()) {
+                        paramType = this->getArrayFromCode(param->arrayDecl());
+                        paramName = paramType.getArrayName();
+                    }
+                    else {
+                        paramType = resolveTypeFromContext(param->typeSpec());
+                        paramName = param->IDENTIFIER()->getText();
+                    }
+                    method->params.emplace_back(paramName, paramType);
+                }
+            }
+
+            m_typeSystem->registerClassMethod(className, method);
+            m_symbolTable->currentFunc = method;
+            m_output << m_codeGen->generateFunctionDecl(method);
+            visit(methodCtx->block());
+            m_symbolTable->currentFunc = nullptr;
+        }
+    }
+
+    return nullptr;
+}
+
+antlrcpp::Any TranspilerVisitor::visitClassConstructor(JBLangParser::ClassConstructorContext* ctx)
+{
+    return nullptr;
+}
+
+antlrcpp::Any TranspilerVisitor::visitNewWithConstructorExpr(JBLangParser::NewWithConstructorExprContext* ctx)
+{
+    std::string className = ctx->IDENTIFIER()->getText();
+
+    auto constructor = m_typeSystem->getClassConstructor(className);
+    if (!constructor) {
+        throw CompilerError(CompilerError::ErrorType::NameError, "No constructor for class: "+className);
+    }
+
+    std::string tempVar = "temp_"+std::to_string(m_tempVarCounter++);
+    std::string indentLevel = m_symbolTable->getIndentLevel();
+
+    Type classType = m_typeSystem->resolveType(className);
+    classType.setPointer(true);
+
+    m_output << indentLevel << m_codeGen->generateVarDecl(tempVar, classType,
+            " = "+m_codeGen->generateAlloc(m_typeSystem->resolveType(className)));
+
+    std::vector<std::string> args;
+    args.push_back(tempVar);
+
+    if (ctx->argumentList()) {
+        for (auto arg : ctx->argumentList()->expression()) {
+            args.push_back(std::any_cast<std::string>(visit(arg)));
+        }
+    }
+
+    m_output << indentLevel << m_codeGen->generateFunctionCall(constructor->name, args) << ";\n";
+
+    return tempVar;
+}
+
+antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExprContext* ctx)
+{
+    auto objExpr = std::any_cast<std::string>(visit(ctx->expression()));
+    std::string methodName = ctx->IDENTIFIER()->getText();
+
+    Variable objVar;
+    if (!m_symbolTable->lookupSymbol(objExpr, objVar)) {
+        throw CompilerError(CompilerError::ErrorType::NameError, "Unknown object: "+objExpr);
+    }
+
+    if (!objVar.type.isClass()) {
+        throw CompilerError(CompilerError::ErrorType::TypeError, "Method call on non-class type");
+    }
+
+    std::string className = objVar.type.getClassName();
+    std::string fullMethodName = className+"_"+methodName;
+
+    std::vector<std::string> args;
+    args.push_back(objExpr);
+
+    if (ctx->argumentList()) {
+        for (auto arg : ctx->argumentList()->expression()) {
+            args.push_back(std::any_cast<std::string>(visit(arg)));
+        }
+    }
+
+    return m_codeGen->generateFunctionCall(fullMethodName, args);
+}
+
+antlrcpp::Any TranspilerVisitor::visitClassField(JBLangParser::ClassFieldContext* ctx)
+{
+    return nullptr;
+}
+
+antlrcpp::Any TranspilerVisitor::visitClassMethod(JBLangParser::ClassMethodContext* ctx)
+{
     return nullptr;
 }
 
