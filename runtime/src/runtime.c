@@ -34,9 +34,27 @@ void* runtime_alloc(size_t bytes)
 
 void runtime_scope_end()
 {
+    if (current_allocator && current_allocator->scope_end) {
+        current_allocator->scope_end();
+    }
 #ifdef DEBUG
     printf("(debug) scope ended\n");
 #endif
+}
+
+void runtime_gc(void)
+{
+    if (current_allocator && current_allocator->gc) {
+        current_allocator->gc();
+    }
+}
+
+
+void runtime_set_gc_threshold(size_t threshold) {
+    if (current_allocator && current_allocator->set_gc_threshold) {
+        current_allocator->set_gc_threshold(threshold);
+    }
+
 }
 
 const char* runtime_get_allocator_name(void)
@@ -52,7 +70,7 @@ AllocatorStats* runtime_get_stats(void)
 void runtime_print_stats(void)
 {
     AllocatorStats* stats = runtime_get_stats();
-    printf("\n\nRuntime Stats\n");
+    printf("\n\nRuntime Stats (%s)\n", runtime_get_allocator_name());
     printf("Total allocs: %zu\nTotal collections: %zu\n", stats->total_allocations, stats->total_collections);
     printf("Current bytes: %zu\nPeak bytes: %zu\n", stats->current_bytes, stats->peak_bytes);
 }

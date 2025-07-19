@@ -15,6 +15,7 @@ typedef struct {
   void (* shutdown)(void);
   void (* inc_ref_count)(void* ptr, void* other);
   void (* dec_ref_count)(void* ptr, size_t offset);
+  void (* set_gc_threshold)(size_t threshold);
 } RuntimeAllocator;
 
 const RuntimeAllocator* get_allocator_implementation(void);

@@ -8,6 +8,8 @@ void* runtime_alloc(size_t bytes);
 void runtime_scope_end(void);
 void runtime_init(void);
 void runtime_shutdown(void);
+void runtime_gc(void);
+void runtime_set_gc_threshold(size_t threshold);
 
 void runtime_inc_ref_count(void* ptr, void* other);
 void runtime_dec_ref_count(void* ptr, size_t offset);

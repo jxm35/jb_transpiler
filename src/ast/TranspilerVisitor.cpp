@@ -17,7 +17,8 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
         m_output << "\n";
     }
 
-    m_output << "int main() {\n    runtime_init();\n    main_();\n    runtime_print_stats();\n}\n";
+    m_output
+            << "int main() {\n    runtime_init();\n    main_();\n    runtime_shutdown();\n}\n";
 
     return m_output.str();
 }
