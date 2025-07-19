@@ -8,39 +8,42 @@
 
 static void* stack_bottom = NULL;
 
-static size_t GC_THRESHOLD = 1024 * 1024; // 1mb
+static size_t GC_THRESHOLD = 1024*1024; // 1mb
 
 typedef struct MSHeader {
-    bool marked;
-    size_t size;
-    struct MSHeader* next;
-    struct MSHeader* prev;
+  bool marked;
+  size_t size;
+  struct MSHeader* next;
+  struct MSHeader* prev;
 } MSHeader;
 
 static MSHeader* allocation_list = NULL;
 static AllocatorStats stats = {0};
 
-static void add_allocation(MSHeader* header) {
+static void add_allocation(MSHeader* header)
+{
     header->next = allocation_list;
     header->prev = NULL;
     if (allocation_list) allocation_list->prev = header;
     allocation_list = header;
 }
 
-static void remove_allocation(MSHeader* header) {
+static void remove_allocation(MSHeader* header)
+{
     if (header->prev) header->prev->next = header->next;
     else allocation_list = header->next;
     if (header->next) header->next->prev = header->prev;
 }
 
-static bool is_valid_pointer(void* ptr) {
+static bool is_valid_pointer(void* ptr)
+{
     if (!ptr) return false;
-    
+
     MSHeader* current = allocation_list;
     while (current) {
-        void* start = (void*)(current + 1);
-        void* end = (char*)start + (current->size - sizeof(MSHeader));
-        if (ptr >= start && ptr < end) {
+        void* start = (void*) (current+1);
+        void* end = (char*) start+(current->size-sizeof(MSHeader));
+        if (ptr>=start && ptr<end) {
             return true;
         }
         current = current->next;
@@ -48,14 +51,15 @@ static bool is_valid_pointer(void* ptr) {
     return false;
 }
 
-static MSHeader* find_header(void* ptr) {
+static MSHeader* find_header(void* ptr)
+{
     if (!ptr) return NULL;
-    
+
     MSHeader* current = allocation_list;
     while (current) {
-        void* start = (void*)(current + 1);
-        void* end = (char*)start + (current->size - sizeof(MSHeader));
-        if (ptr >= start && ptr < end) {
+        void* start = (void*) (current+1);
+        void* end = (char*) start+(current->size-sizeof(MSHeader));
+        if (ptr>=start && ptr<end) {
             return current;
         }
         current = current->next;
@@ -63,42 +67,41 @@ static MSHeader* find_header(void* ptr) {
     return NULL;
 }
 
-static void mark(void* ptr) {
+static void mark(void* ptr)
+{
     MSHeader* header = find_header(ptr);
     if (!header || header->marked) return;
-    
-    header->marked = true;
-#ifdef DEBUG
-    printf("(debug) Marked object at %p\n", ptr);
-#endif
 
-    void** start = (void**)(header + 1);
-    void** end = (void**)((char*)header + header->size);
-    for (void** p = start; p < end; ++p) {
+    header->marked = true;
+
+    void** start = (void**) (header+1);
+    void** end = (void**) ((char*) header+header->size);
+    for (void** p = start; p<end; ++p) {
         if (is_valid_pointer(*p)) {
             mark(*p);
         }
     }
 }
 
-static void conservative_scan_stack(void) {
-    int *dummy;
-    void** stack_top = (void**)&dummy;
-    void** bottom = (void**)stack_bottom;
+static void conservative_scan_stack(void)
+{
+    void** bottom = (void**) stack_bottom;
 
-    #ifdef DEBUG
-        printf("(debug) Scanning stack from %p to %p\n", stack_top, bottom);
-    #endif
+    void** stack_top = (void**) __builtin_frame_address(0);
 
+#ifdef DEBUG
+    printf("(debug) Scanning stack from %p to %p\n", stack_top, bottom);
+#endif
 
-    if (stack_top < bottom) {
-        for (void** p = stack_top; p < bottom; ++p) {
+    if (stack_top<bottom) {
+        for (void** p = stack_top; p<bottom; ++p) {
             if (is_valid_pointer(*p)) {
                 mark(*p);
             }
         }
-    } else {
-        for (void** p = bottom; p < stack_top; ++p) {
+    }
+    else {
+        for (void** p = bottom; p<stack_top; ++p) {
             if (is_valid_pointer(*p)) {
                 mark(*p);
             }
@@ -106,7 +109,8 @@ static void conservative_scan_stack(void) {
     }
 }
 
-static void mark_phase(void) {
+static void mark_phase(void)
+{
 #ifdef DEBUG
     printf("(debug) Starting conservative mark phase\n");
 #endif
@@ -120,16 +124,16 @@ static void mark_phase(void) {
     conservative_scan_stack();
 }
 
-
-static void sweep_phase(void) {
+static void sweep_phase(void)
+{
 #ifdef DEBUG
     printf("(debug) Starting sweep phase\n");
 #endif
-    
+
     MSHeader* current = allocation_list;
     size_t freed_count = 0;
     size_t freed_bytes = 0;
-    
+
     while (current) {
         MSHeader* next = current->next;
         if (!current->marked) {
@@ -142,28 +146,30 @@ static void sweep_phase(void) {
         }
         current = next;
     }
-    
+
 #ifdef DEBUG
     printf("(debug) Freed %zu objects (%zu bytes)\n", freed_count, freed_bytes);
 #endif
 }
 
-static void collect_garbage(void) {
+static void collect_garbage(void)
+{
 #ifdef DEBUG
     printf("(debug) Starting garbage collection\n");
     size_t before = stats.current_bytes;
 #endif
-    
+
     mark_phase();
     sweep_phase();
-    
+
 #ifdef DEBUG
     printf("(debug) GC complete: %zu -> %zu bytes\n", before, stats.current_bytes);
 #endif
 }
 
-static void* ms_alloc(size_t size) {
-    size_t total = sizeof(MSHeader) + size;
+static void* ms_alloc(size_t size)
+{
+    size_t total = sizeof(MSHeader)+size;
     MSHeader* header = malloc(total);
     if (!header) return NULL;
 
@@ -174,82 +180,88 @@ static void* ms_alloc(size_t size) {
     add_allocation(header);
     stats.current_bytes += total;
     stats.total_allocations++;
-    if (stats.current_bytes > stats.peak_bytes)
+    if (stats.current_bytes>stats.peak_bytes)
         stats.peak_bytes = stats.current_bytes;
 
 #ifdef DEBUG
     printf("(debug) Allocated %zu bytes at %p\n", size, (void*)(header + 1));
 #endif
 
-    if (stats.current_bytes > GC_THRESHOLD) {
+    if (stats.current_bytes>GC_THRESHOLD) {
         collect_garbage();
     }
 
-    return header + 1;
+    return header+1;
 }
 
-static void ms_dealloc(void* ptr) {
+static void ms_dealloc(void* ptr)
+{
     if (!ptr) return;
-    
-    MSHeader* header = (MSHeader*)ptr - 1;
+
+    MSHeader* header = (MSHeader*) ptr-1;
     remove_allocation(header);
     stats.current_bytes -= header->size;
     free(header);
 }
 
-static void ms_gc(void) {
+static void ms_gc(void)
+{
     collect_garbage();
 }
 
-static void ms_scope_end(void) {
+static void ms_scope_end(void)
+{
 }
 
-static AllocatorStats* ms_get_stats(void) {
+static AllocatorStats* ms_get_stats(void)
+{
     return &stats;
 }
 
-static void ms_init(void) {
+static void ms_init(void)
+{
+    stack_bottom = __builtin_frame_address(1);
     allocation_list = NULL;
-    stats = (AllocatorStats){0};
-
-    int *dummy;
-    stack_bottom = &dummy;
+    stats = (AllocatorStats) {0};
 
 #ifdef DEBUG
     printf("(debug) Mark-sweep allocator initialized\n");
 #endif
 }
 
-static void ms_shutdown(void) {
+static void ms_shutdown(void)
+{
     collect_garbage();
     while (allocation_list) {
         MSHeader* next = allocation_list->next;
-        #ifdef DEBUG
-            printf("(debug) Shutdown freeing %p\n", next);
-        #endif    
+#ifdef DEBUG
+        printf("(debug) Shutdown freeing %p\n", next);
+#endif
         free(allocation_list);
         allocation_list = next;
     }
 }
 
-static void ms_set_gc_threshold(size_t threshold) {
+static void ms_set_gc_threshold(size_t threshold)
+{
     GC_THRESHOLD = threshold;
 }
 
 static const RuntimeAllocator mark_sweep_allocator = {
-    .name = "Mark-Sweep GC",
-    .alloc = ms_alloc,
-    .dealloc = ms_dealloc,
-    .gc = ms_gc,
-    .scope_end = ms_scope_end,
-    .get_stats = ms_get_stats,
-    .init = ms_init,
-    .shutdown = ms_shutdown,
-    .inc_ref_count = NULL,
-    .dec_ref_count = NULL,
-    .set_gc_threshold = ms_set_gc_threshold
+        .name = "Mark-Sweep GC",
+        .alloc = ms_alloc,
+        .dealloc = ms_dealloc,
+        .gc = ms_gc,
+        .scope_end = ms_scope_end,
+        .get_stats = ms_get_stats,
+        .init = ms_init,
+        .shutdown = ms_shutdown,
+        .inc_ref_count = NULL,
+        .dec_ref_count = NULL,
+        .set_gc_threshold = ms_set_gc_threshold
 };
 
-const RuntimeAllocator* get_mark_sweep_allocator(void) {
+const RuntimeAllocator* get_mark_sweep_allocator(void)
+{
     return &mark_sweep_allocator;
 }
