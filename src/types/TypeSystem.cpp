@@ -199,3 +199,59 @@ std::shared_ptr<Function> TypeSystem::getClassConstructor(const std::string& cla
     auto it = m_classConstructors.find(className);
     return it!=m_classConstructors.end() ? it->second : nullptr;
 }
+
+Type TypeSystem::setClassParent(const std::string& className, const std::string& parentName)
+{
+    auto it = m_classes.find(className);
+    if (it==m_classes.end()) {
+        throw CompilerError(CompilerError::ErrorType::TypeError, "Class not found: "+className);
+    }
+
+    auto parentIt = m_classes.find(parentName);
+    if (parentIt==m_classes.end()) {
+        throw CompilerError(CompilerError::ErrorType::TypeError, "Parent class not found: "+parentName);
+    }
+
+    Type& type = it->second;
+    type.setParentClass(parentName);
+    return type;
+}
+
+bool TypeSystem::isSubclassOf(const std::string& child, const std::string& parent) const
+{
+    auto it = m_classes.find(child);
+    if (it==m_classes.end()) return false;
+
+    std::string current = child;
+    while (true) {
+        auto currentIt = m_classes.find(current);
+        if (currentIt==m_classes.end()) break;
+
+        if (!currentIt->second.hasParent()) break;
+
+        std::string parentClass = currentIt->second.getParentClass();
+        if (parentClass==parent) return true;
+        current = parentClass;
+    }
+    return false;
+}
+
+std::vector<std::pair<std::string, Type>> TypeSystem::getAllClassMembers(const std::string& className) const
+{
+    auto it = m_classes.find(className);
+    if (it==m_classes.end()) {
+        throw CompilerError(CompilerError::ErrorType::TypeError, "Class not found: "+className);
+    }
+
+    std::vector<std::pair<std::string, Type>> allMembers;
+
+    if (it->second.hasParent()) {
+        auto parentMembers = getAllClassMembers(it->second.getParentClass());
+        allMembers.insert(allMembers.end(), parentMembers.begin(), parentMembers.end());
+    }
+
+    const auto& ownMembers = it->second.getStructMembers();
+    allMembers.insert(allMembers.end(), ownMembers.begin(), ownMembers.end());
+
+    return allMembers;
+}

@@ -79,6 +79,9 @@ public:
 
     Type getStructFromCode(JBLangParser::StructDeclContext* ctx);
     Type getClassFromCode(JBLangParser::ClassDeclContext* ctx);
+    void processClassInheritance(JBLangParser::ClassDeclContext* ctx, const std::string& className);
+    std::string generateParentConstructorCall(JBLangParser::ClassConstructorContext* ctx, const std::string& className);
+    std::string resolveFieldAccess(const std::string& fieldName, const std::string& className);
     Type getArrayFromCode(JBLangParser::ArrayDeclContext* ctx);
 
 private:

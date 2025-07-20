@@ -1,0 +1,99 @@
+#include <stdio.h>
+
+class Animal {
+    int age;
+
+    Animal(int a)
+    {
+        this->age = a;
+    }
+
+    void speak()
+    {
+        printf("Animal sound\n");
+    }
+
+    void sleep()
+    {
+        printf("Sleeping for %d hours\n", this->age/2);
+    }
+
+    int getAge()
+    {
+        return this->age;
+    }
+};
+
+class Dog : Animal {
+    int breed_id;
+
+    Dog(int a, int b)
+            :Animal(a)
+    {
+        this->breed_id = b;
+    }
+
+    void speak()
+    {
+        printf("Woof! I'm %d years old\n", this->age);
+    }
+
+    void wagTail()
+    {
+        printf("Wagging tail happily\n");
+    }
+
+    int getBreed()
+    {
+        return this->breed_id;
+    }
+};
+
+class Cat : Animal {
+    int lives;
+
+    Cat(int a)
+            :Animal(a)
+    {
+        this->lives = 9;
+    }
+
+    void speak()
+    {
+        printf("Meow! I have %d lives left\n", this->lives);
+    }
+
+    void purr()
+    {
+        printf("Purring contentedly\n");
+    }
+};
+
+int main()
+{
+    printf("=== Animal Inheritance Test ===\n");
+
+    Dog* dog = new Dog(3, 42);
+    Cat* cat = new Cat(2);
+
+    printf("\n--- Dog Tests ---\n");
+    dog->speak();
+    dog->sleep();
+    dog->wagTail();
+    printf("Dog age: %d\n", dog->getAge());
+    printf("Dog breed: %d\n", dog->getBreed());
+
+    printf("\n--- Cat Tests ---\n");
+    cat->speak();
+    cat->sleep();
+    cat->purr();
+    printf("Cat age: %d\n", cat->getAge());
+
+    printf("\n--- Parent Method Calls ---\n");
+    Animal* animal = new Animal(5);
+    animal->speak();
+    animal->sleep();
+    printf("Animal age: %d\n", animal->getAge());
+
+    return 0;
+}

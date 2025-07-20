@@ -428,9 +428,13 @@ antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext
 
 Type TranspilerVisitor::getClassFromCode(JBLangParser::ClassDeclContext* ctx)
 {
-    std::string className = ctx->IDENTIFIER()->getText();
+    std::string className = ctx->IDENTIFIER(0)->getText();
     m_typeSystem->registerClass(className);
 
+    if (ctx->IDENTIFIER().size()>1) {
+        std::string parentName = ctx->IDENTIFIER(1)->getText();
+        m_typeSystem->setClassParent(className, parentName);
+    }
     std::vector<std::pair<std::string, Type>> fields;
 
     for (auto member : ctx->classMember()) {
@@ -449,12 +453,64 @@ Type TranspilerVisitor::getClassFromCode(JBLangParser::ClassDeclContext* ctx)
     return m_typeSystem->setClassMembers(className, fields);
 }
 
+void TranspilerVisitor::processClassInheritance(JBLangParser::ClassDeclContext* ctx, const std::string& className)
+{
+    if (ctx->IDENTIFIER().size()>1) {
+        std::string parentName = ctx->IDENTIFIER(1)->getText();
+        m_typeSystem->setClassParent(className, parentName);
+    }
+}
+
+std::string TranspilerVisitor::generateParentConstructorCall(JBLangParser::ClassConstructorContext* ctx,
+        const std::string& className)
+{
+    if (ctx->IDENTIFIER().size()>1) {
+        std::string parentName = ctx->IDENTIFIER(1)->getText();
+        std::string parentConstructor = parentName+"_"+parentName;
+
+        std::vector<std::string> args;
+        args.push_back("&(this->parent)");
+
+        for (auto arg : ctx->argumentList()->expression()) {
+            args.push_back(std::any_cast<std::string>(visit(arg)));
+        }
+
+        return m_symbolTable->getIndentLevel()+m_codeGen->generateFunctionCall(parentConstructor, args)+";\n";
+    }
+    return "";
+}
+
+std::string TranspilerVisitor::resolveFieldAccess(const std::string& fieldName, const std::string& className)
+{
+    auto classType = m_typeSystem->resolveType(className);
+
+    for (const auto& member : classType.getStructMembers()) {
+        if (member.first==fieldName) {
+            return "this->"+fieldName;
+        }
+    }
+
+    if (classType.hasParent()) {
+        std::string parentClass = classType.getParentClass();
+        return "this->parent."+fieldName;  // TODO: Validate field exists in parent
+    }
+
+    throw CompilerError(CompilerError::ErrorType::NameError, "Field not found: "+fieldName);
+}
+
 antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* ctx)
 {
     Type classType = getClassFromCode(ctx);
-    std::string className = classType.getClassName();
+    std::string className = ctx->IDENTIFIER(0)->getText();
+    m_output << "struct " << className << " {\n";
 
-    m_output << m_codeGen->generateStructDecl(className, classType) << ";\n";
+    if (classType.hasParent()) {
+        m_output << "    struct " << classType.getParentClass() << " parent;\n";
+    }
+    for (const auto& member : classType.getStructMembers()) {
+        m_output << "    " << member.second.toString() << " " << member.first << ";\n";
+    }
+    m_output << "};\n\n";
 
     for (auto member : ctx->classMember()) {
         if (auto constructorCtx = dynamic_cast<JBLangParser::ClassConstructorContext*>(member)) {
@@ -484,8 +540,10 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
 
             m_typeSystem->registerClassConstructor(className, constructor);
             m_symbolTable->currentFunc = constructor;
-            m_output << m_codeGen->generateFunctionDecl(constructor);
+            m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
+            m_output << generateParentConstructorCall(constructorCtx, className);
             visit(constructorCtx->block());
+            m_output << "}\n\n";
             m_symbolTable->currentFunc = nullptr;
         }
         if (auto methodCtx = dynamic_cast<JBLangParser::ClassMethodContext*>(member)) {
@@ -576,10 +634,37 @@ antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExp
     }
 
     std::string className = objVar.type.getClassName();
-    std::string fullMethodName = className+"_"+methodName;
+
+    std::string fullMethodName;
+    std::string currentClass = className;
+
+    while (true) {
+        auto methods = m_typeSystem->getClassMethods(currentClass);
+        for (const auto& method : methods) {
+            if (method->name==currentClass+"_"+methodName) {
+                fullMethodName = method->name;
+                break;
+            }
+        }
+
+        if (!fullMethodName.empty()) break;
+
+        auto classType = m_typeSystem->resolveType(currentClass);
+        if (!classType.hasParent()) {
+            throw CompilerError(CompilerError::ErrorType::NameError,
+                    "Method not found: "+methodName+" in class "+className);
+        }
+        currentClass = classType.getParentClass();
+    }
 
     std::vector<std::string> args;
-    args.push_back(objExpr);
+
+    if (currentClass!=className) {
+        args.push_back("&(("+objExpr+")->parent)");
+    }
+    else {
+        args.push_back(objExpr);
+    }
 
     if (ctx->argumentList()) {
         for (auto arg : ctx->argumentList()->expression()) {
@@ -633,6 +718,44 @@ antlrcpp::Any TranspilerVisitor::visitWhileStmt(JBLangParser::WhileStmtContext* 
 antlrcpp::Any TranspilerVisitor::visitPointerMemberExpr(JBLangParser::PointerMemberExprContext* ctx)
 {
     auto base = std::any_cast<std::string>(visit(ctx->expression()));
+    if (base=="this" && m_symbolTable->currentFunc) {
+        std::string funcName = m_symbolTable->currentFunc->name;
+        size_t underscore = funcName.find('_');
+        if (underscore!=std::string::npos) {
+            std::string className = funcName.substr(0, underscore);
+            try {
+                auto classType = m_typeSystem->resolveType(className);
+                if (classType.isClass()) {
+                    return resolveFieldAccess(ctx->IDENTIFIER()->getText(), className);
+                }
+            }
+            catch (...) {
+                // Fall through
+            }
+        }
+    }
+
+    Variable baseVar;
+    if (m_symbolTable->lookupSymbol(base, baseVar) && baseVar.type.isClass()) {
+        std::string className = baseVar.type.getClassName();
+        std::string memberName = ctx->IDENTIFIER()->getText();
+
+        auto methods = m_typeSystem->getClassMethods(className);
+        for (const auto& method : methods) {
+            if (method->name==className+"_"+memberName) {
+                return "METHOD_CALL:"+className+"_"+memberName+":"+base;
+            }
+        }
+
+        try {
+            std::string fieldAccess = resolveFieldAccess(memberName, className);
+            return fieldAccess.replace(0, 4, base);  // Replace "this" with actual object
+        }
+        catch (...) {
+            // Fall through
+        }
+    }
+
     return base+"->"+ctx->IDENTIFIER()->getText();
 }
 

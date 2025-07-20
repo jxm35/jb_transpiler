@@ -68,6 +68,9 @@ public:
     {
         m_structMembers = std::move(members);
     }
+    void setParentClass(std::string parent) { m_parentClass = std::move(parent); }
+    const std::string& getParentClass() const noexcept { return m_parentClass; }
+    bool hasParent() const noexcept { return !m_parentClass.empty(); }
 
     const std::vector<int>& getArraySizes() const noexcept
     {
@@ -80,6 +83,7 @@ private:
     bool m_isPointer;
     bool m_isConst;
     std::string m_structName;
+    std::string m_parentClass;
     std::vector<std::pair<std::string, Type>> m_structMembers;
 };
 
@@ -121,6 +125,9 @@ public:
     Type registerClass(const std::string& name);
     Type setStructMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members);
     Type setClassMembers(const std::string& name, std::vector<std::pair<std::string, Type>> members);
+    Type setClassParent(const std::string& className, const std::string& parentName);
+    bool isSubclassOf(const std::string& child, const std::string& parent) const;
+    std::vector<std::pair<std::string, Type>> getAllClassMembers(const std::string& className) const;
     void registerClassMethod(const std::string& className, std::shared_ptr<Function> method);
     void registerClassConstructor(const std::string& className, std::shared_ptr<Function> constructor);
     std::shared_ptr<Function> getClassConstructor(const std::string& className) const;

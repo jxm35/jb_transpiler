@@ -30,13 +30,13 @@ typedefDecl
     ;
 
 classDecl
-    : 'class' IDENTIFIER '{' classMember* '}' ';'?
+    : 'class' IDENTIFIER (':' IDENTIFIER)? '{' classMember* '}' ';'?
     ;
 
 classMember
     : ((typeSpec IDENTIFIER) | arrayDecl) ';'     # ClassField
     | typeSpec IDENTIFIER '(' paramList? ')' block # ClassMethod
-    | IDENTIFIER '(' paramList? ')' block          # ClassConstructor
+    | IDENTIFIER '(' paramList? ')' (':' IDENTIFIER '(' argumentList? ')')? block # ClassConstructor
     ;
 
 forStmt
@@ -105,27 +105,27 @@ block
     ;
 
 expression
-    : primary                                       # PrimaryExpr
-    | expression '.' IDENTIFIER                     # MemberExpr
-    | functionCall                                  # FuncCallExpr
-    | expression op=('*'|'/') expression           # MulDivExpr
-    | expression op=('+'|'-') expression           # AddSubExpr
+    : primary                                         # PrimaryExpr
+    | expression '.' IDENTIFIER                       # MemberExpr
+    | functionCall                                    # FuncCallExpr
+    | expression op=('*'|'/') expression              # MulDivExpr
+    | expression op=('+'|'-') expression              # AddSubExpr
     | expression op=('=='|'!='|'<'|'>'|'<='|'>=') expression # CompareExpr
-    | expression '=' expression                     # AssignExpr
-    | IDENTIFIER                                    # VarExpr
-    | literal                                       # LiteralExpr
-    | 'new' typeSpec                                # NewExpr
-    | 'new' IDENTIFIER '(' argumentList? ')'       # NewWithConstructorExpr
-    | expression '->' IDENTIFIER                    # PointerMemberExpr
-    | '&' expression                               # AddressOfExpr
-    | '*' expression                               # DereferenceExpr
-    | expression '[' expression ']'                 # ArrayAccessExpr
+    | expression '=' expression                        # AssignExpr
+    | IDENTIFIER                                       # VarExpr
+    | literal                                          # LiteralExpr
+    | 'new' typeSpec                                   # NewExpr
+    | 'new' IDENTIFIER '(' argumentList? ')'           # NewWithConstructorExpr
+    | expression '->' IDENTIFIER                       # PointerMemberExpr
+    | '&' expression                                   # AddressOfExpr
+    | '*' expression                                   # DereferenceExpr
+    | expression '[' expression ']'                    # ArrayAccessExpr
     | expression '->' IDENTIFIER '(' argumentList? ')' # MethodCallExpr
     | '{' initializerList? '}'                         # StructInitExpr
-    | expression '++'                              # PostIncrementExpr
-    | expression '--'                              # PostDecrementExpr
-    | '++' expression                              # PreIncrementExpr
-    | '--' expression                              # PreDecrementExpr
+    | expression '++'                                  # PostIncrementExpr
+    | expression '--'                                  # PostDecrementExpr
+    | '++' expression                                  # PreIncrementExpr
+    | '--' expression                                  # PreDecrementExpr
     ;
 
 initializerList
