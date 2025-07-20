@@ -83,6 +83,8 @@ public:
     std::string generateParentConstructorCall(JBLangParser::ClassConstructorContext* ctx, const std::string& className);
     std::string resolveFieldAccess(const std::string& fieldName, const std::string& className);
     Type getArrayFromCode(JBLangParser::ArrayDeclContext* ctx);
+    std::vector<std::string> getClassNames() const;
+    void generateClassMethodBodies();
 
 private:
     std::unique_ptr<CodeGenerator> m_codeGen;
@@ -92,5 +94,6 @@ private:
     std::stringstream m_output;
     int m_tempVarCounter;
     bool addRefCounts;
+    std::vector<std::string> m_classNames;
     Type resolveTypeFromContext(JBLangParser::TypeSpecContext* ctx);
 };

@@ -95,5 +95,9 @@ int main()
     animal->sleep();
     printf("Animal age: %d\n", animal->getAge());
 
+    printf("\n--- Non virtual method call on upcast ---\n");
+    animal = dog;
+    animal->speak();
+
     return 0;
 }

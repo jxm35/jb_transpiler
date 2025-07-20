@@ -1,4 +1,5 @@
 #include "jblang/types/TypeSystem.h"
+#include <set>
 #include <utility>
 
 std::string outputVariable(const Type& type, const std::string& name)
@@ -254,4 +255,108 @@ std::vector<std::pair<std::string, Type>> TypeSystem::getAllClassMembers(const s
     allMembers.insert(allMembers.end(), ownMembers.begin(), ownMembers.end());
 
     return allMembers;
+}
+
+std::vector<std::shared_ptr<Function>> TypeSystem::getVirtualMethods(const std::string& className) const
+{
+    std::vector<std::shared_ptr<Function>> virtualMethods;
+    auto methods = getClassMethods(className);
+    for (const auto& method : methods) {
+        if (method->isVirtual) {
+            virtualMethods.push_back(method);
+        }
+    }
+    return virtualMethods;
+}
+
+bool TypeSystem::hasVirtualMethods(const std::string& className) const
+{
+    return !getVirtualMethods(className).empty();
+}
+
+std::vector<std::shared_ptr<Function>> TypeSystem::getAllVirtualMethods(const std::string& className) const
+{
+    std::vector<std::shared_ptr<Function>> allVirtuals;
+    std::set<std::string>seenMethods;
+
+    std::string current = className;
+    while (true) {
+        auto it = m_classes.find(current);
+        if (it==m_classes.end()) break;
+
+        auto methods = getClassMethods(current);
+        for (const auto& method : methods) {
+            if (method->isVirtual && seenMethods.find(method->name)==seenMethods.end()) {
+                allVirtuals.push_back(method);
+                seenMethods.insert(method->name);
+            }
+        }
+
+        if (!it->second.hasParent()) break;
+        current = it->second.getParentClass();
+    }
+
+    return allVirtuals;
+}
+
+std::string TypeSystem::generateVTableStruct() const
+{
+    std::set<std::string>allVirtualMethods;
+
+    for (const auto& classPair : m_classes) {
+        auto virtuals = getAllVirtualMethods(classPair.first);
+        for (const auto& method : virtuals) {
+            std::string baseName = method->name.substr(method->name.find('_')+1);
+            allVirtualMethods.insert(baseName);
+        }
+    }
+
+    std::string vtableStruct = "struct vtable {\n";
+    for (const auto& methodName : allVirtualMethods) {
+        vtableStruct += "    void (*"+methodName+")(void* this);\n";
+    }
+    vtableStruct += "};\n\n";
+
+    return vtableStruct;
+}
+
+std::string TypeSystem::generateVTableInstance(const std::string& className) const
+{
+    auto allVirtuals = getAllVirtualMethods(className);
+    if (allVirtuals.empty()) return "";
+
+    std::string instance = "static struct vtable "+className+"_vtable = {\n";
+
+    std::set<std::string>processedMethods;
+    for (const auto& method : allVirtuals) {
+        std::string baseName = method->name.substr(method->name.find('_')+1);
+        if (processedMethods.find(baseName)==processedMethods.end()) {
+            std::string implName = findMethodImplementation(className, baseName);
+            instance += "    ."+baseName+" = "+implName+",\n";
+            processedMethods.insert(baseName);
+        }
+    }
+
+    instance += "};\n\n";
+    return instance;
+}
+
+std::string TypeSystem::findMethodImplementation(const std::string& className, const std::string& methodName) const
+{
+    std::string current = className;
+    while (true) {
+        auto methods = getClassMethods(current);
+        for (const auto& method : methods) {
+            std::string baseName = method->name.substr(method->name.find('_')+1);
+            if (baseName==methodName) {
+                return method->name;
+            }
+        }
+
+        auto it = m_classes.find(current);
+        if (it==m_classes.end() || !it->second.hasParent()) break;
+        current = it->second.getParentClass();
+    }
+
+    return className+"_"+methodName;
 }

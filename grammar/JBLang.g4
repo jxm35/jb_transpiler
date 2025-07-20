@@ -35,7 +35,7 @@ classDecl
 
 classMember
     : ((typeSpec IDENTIFIER) | arrayDecl) ';'     # ClassField
-    | typeSpec IDENTIFIER '(' paramList? ')' block # ClassMethod
+    | 'virtual'? typeSpec IDENTIFIER '(' paramList? ')' block # ClassMethod
     | IDENTIFIER '(' paramList? ')' (':' IDENTIFIER '(' argumentList? ')')? block # ClassConstructor
     ;
 

@@ -32,6 +32,7 @@ public:
     virtual std::string generateIncRef(const Variable& var, const std::string& other = "NULL") = 0;
     virtual std::string generateDecRef(const Variable& var) = 0;
     virtual std::string generateAlloc(const Type& type) = 0;
+    virtual std::string generateCast(const std::string& expr, const Type& fromType, const Type& toType) = 0;
 };
 
 #endif //CODEGENERATOR_H

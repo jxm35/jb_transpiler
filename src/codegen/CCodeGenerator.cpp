@@ -15,6 +15,13 @@ std::string CCodeGenerator::generateFunctionDecl(const std::shared_ptr<Function>
     if (!func) {
         throw std::runtime_error("Cannot generate declaration for null function");
     }
+    if (func->isVirtual && !func->params.empty()) {
+        std::string signature = func->returnType.toString()+" "+func->name+"(void* this_param";
+        for (size_t i = 1; i<func->params.size(); ++i) {
+            signature += ", "+func->params[i].second.toString()+" "+func->params[i].first;
+        }
+        return signature+")";
+    }
     return func->getSignature();
 }
 
@@ -124,4 +131,23 @@ std::string CCodeGenerator::generateDecRef(const Variable& var)
         code += "0";
     }
     return code+");\n";
+}
+
+std::string CCodeGenerator::generateCast(const std::string& expr, const Type& fromType, const Type& toType)
+{
+    if (fromType.isPointer() && toType.isPointer() &&
+            fromType.isClass() && toType.isClass()) {
+
+        std::string fromClass = fromType.getClassName();
+        std::string toClass = toType.getClassName();
+
+        if (fromClass==toClass) {
+            return expr;
+        }
+
+        // Upcast
+        return "&(("+expr+")->parent)";
+    }
+
+    return expr;
 }

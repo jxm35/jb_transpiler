@@ -17,6 +17,16 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
         m_output << "\n";
     }
 
+    m_output << m_typeSystem->generateVTableStruct();
+
+    for (const auto& className : m_classNames) {
+        if (m_typeSystem->hasVirtualMethods(className)) {
+            m_output << m_typeSystem->generateVTableInstance(className);
+        }
+    }
+
+//    generateClassMethodBodies();
+
     m_output << "int main() {\n    runtime_init();\n";
     for (const auto& [name, type] : m_symbolTable->globalVars) {
         m_output << "    runtime_register_root(&" << name << ");\n";
@@ -99,6 +109,13 @@ antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext* ctx)
         }
         if (ctx->expression()) {
             auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
+
+            Variable initVar;
+            if (m_symbolTable->lookupSymbol(initExpr, initVar)) {
+                if (m_typeSystem->isCompatible(initVar.type, varType)) {
+                    initExpr = m_codeGen->generateCast(initExpr, initVar.type, varType);
+                }
+            }
             Variable assignedFrom;
             bool found = m_symbolTable->lookupSymbol(initExpr, assignedFrom);
             if (found && assignedFrom.type.isPointer()) {
@@ -299,6 +316,16 @@ antlrcpp::Any TranspilerVisitor::visitAssignExpr(JBLangParser::AssignExprContext
     auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
     auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
 
+    Variable leftVar, rightVar;
+    bool leftFound = m_symbolTable->lookupSymbol(left, leftVar);
+    bool rightFound = m_symbolTable->lookupSymbol(right, rightVar);
+
+    if (leftFound && rightFound) {
+        if (m_typeSystem->isCompatible(rightVar.type, leftVar.type)) {
+            right = m_codeGen->generateCast(right, rightVar.type, leftVar.type);
+        }
+    }
+
     Variable assignedFrom;
     bool found = m_symbolTable->lookupSymbol(right, assignedFrom);
     if (found && assignedFrom.type.isPointer()) {
@@ -345,6 +372,27 @@ antlrcpp::Any TranspilerVisitor::visitFunctionCall(JBLangParser::FunctionCallCon
         std::string objName = funcName.substr(secondColon+1);
 
         args.push_back(objName);
+    }
+
+    else if (funcName.find("VIRTUAL_CALL:")==0) {
+        size_t firstColon = funcName.find(':', 13);
+        size_t secondColon = funcName.find(':', firstColon+1);
+        std::string methodName = funcName.substr(13, firstColon-13);
+        std::string objName = funcName.substr(secondColon+1);
+
+        args.push_back(objName);
+
+        code += indentLevel+objName+"->vtable->"+methodName+"("+objName;
+        if (ctx->argumentList()) {
+            for (auto arg : ctx->argumentList()->expression()) {
+                code += ", "+std::any_cast<std::string>(visit(arg));
+            }
+        }
+        code += ")";
+        if (pointerArgs) {
+            code += ";\n";
+        }
+        return code;
     }
 
     if (ctx->argumentList()) {
@@ -502,10 +550,14 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
 {
     Type classType = getClassFromCode(ctx);
     std::string className = ctx->IDENTIFIER(0)->getText();
+    m_classNames.push_back(className);
     m_output << "struct " << className << " {\n";
 
     if (classType.hasParent()) {
         m_output << "    struct " << classType.getParentClass() << " parent;\n";
+    }
+    else if (false) { // hasVirtuals
+        m_output << "    struct vtable* vtable;\n";
     }
     for (const auto& member : classType.getStructMembers()) {
         m_output << "    " << member.second.toString() << " " << member.first << ";\n";
@@ -541,15 +593,22 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
             m_typeSystem->registerClassConstructor(className, constructor);
             m_symbolTable->currentFunc = constructor;
             m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
+
+            if (m_typeSystem->hasVirtualMethods(className)) {
+                m_output << "    this->vtable = &" << className << "_vtable;\n";
+            }
+
             m_output << generateParentConstructorCall(constructorCtx, className);
             visit(constructorCtx->block());
             m_output << "}\n\n";
             m_symbolTable->currentFunc = nullptr;
         }
-        if (auto methodCtx = dynamic_cast<JBLangParser::ClassMethodContext*>(member)) {
+        else if (auto methodCtx = dynamic_cast<JBLangParser::ClassMethodContext*>(member)) {
             auto method = std::make_shared<Function>();
             method->name = className+"_"+methodCtx->IDENTIFIER()->getText();
             method->returnType = resolveTypeFromContext(methodCtx->typeSpec());
+            std::string methodText = methodCtx->getText();
+            method->isVirtual = methodText.find("virtual")!=std::string::npos;
 
             Type thisType = classType;
             thisType.setPointer(true);
@@ -574,10 +633,34 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
             m_typeSystem->registerClassMethod(className, method);
             m_symbolTable->currentFunc = method;
             m_output << m_codeGen->generateFunctionDecl(method);
-            visit(methodCtx->block());
+            if (method->isVirtual) {
+                m_output << " {\n    struct " << className << "* this = (struct " << className << "*)this_param;\n";
+                visit(methodCtx->block());
+                m_output << "}\n\n";
+            }
+            else {
+                visit(methodCtx->block());
+            }
+
             m_symbolTable->currentFunc = nullptr;
         }
     }
+
+//    bool hasVirtuals = m_typeSystem->hasVirtualMethods(className);
+//
+//    m_output << "struct " << className << " {\n";
+//
+//    if (classType.hasParent()) {
+//        m_output << "    struct " << classType.getParentClass() << " parent;\n";
+//    }
+//    else if (hasVirtuals) {
+//        m_output << "    struct vtable* vtable;\n";
+//    }
+//
+//    for (const auto& member : classType.getStructMembers()) {
+//        m_output << "    " << member.second.toString() << " " << member.first << ";\n";
+//    }
+//    m_output << "};\n\n";
 
     return nullptr;
 }
@@ -637,12 +720,14 @@ antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExp
 
     std::string fullMethodName;
     std::string currentClass = className;
+    bool isVirtual = false;
 
     while (true) {
         auto methods = m_typeSystem->getClassMethods(currentClass);
         for (const auto& method : methods) {
             if (method->name==currentClass+"_"+methodName) {
                 fullMethodName = method->name;
+                isVirtual = method->isVirtual;
                 break;
             }
         }
@@ -655,6 +740,23 @@ antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExp
                     "Method not found: "+methodName+" in class "+className);
         }
         currentClass = classType.getParentClass();
+    }
+
+    if (isVirtual) {
+        std::vector<std::string> args;
+        args.push_back(objExpr);
+
+        if (ctx->argumentList()) {
+            for (auto arg : ctx->argumentList()->expression()) {
+                args.push_back(std::any_cast<std::string>(visit(arg)));
+            }
+        }
+
+        std::string call = objExpr+"->vtable->"+methodName+"("+objExpr;
+        for (size_t i = 1; i<args.size(); ++i) {
+            call += ", "+args[i];
+        }
+        return call+")";
     }
 
     std::vector<std::string> args;
@@ -742,6 +844,9 @@ antlrcpp::Any TranspilerVisitor::visitPointerMemberExpr(JBLangParser::PointerMem
 
         auto methods = m_typeSystem->getClassMethods(className);
         for (const auto& method : methods) {
+            if (method->isVirtual) {
+                return "VIRTUAL_CALL:"+memberName+":"+base;
+            }
             if (method->name==className+"_"+memberName) {
                 return "METHOD_CALL:"+className+"_"+memberName+":"+base;
             }
@@ -870,4 +975,43 @@ Type TranspilerVisitor::resolveTypeFromContext(JBLangParser::TypeSpecContext* ct
     }
 
     return m_typeSystem->resolveType(typeText);
+}
+
+std::vector<std::string> TranspilerVisitor::getClassNames() const
+{
+    std::vector<std::string> classNames;
+    return classNames;
+}
+
+void TranspilerVisitor::generateClassMethodBodies()
+{
+    for (const auto& className : m_classNames) {
+        auto constructor = m_typeSystem->getClassConstructor(className);
+        if (constructor) {
+            m_symbolTable->currentFunc = constructor;
+            m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
+
+            if (m_typeSystem->hasVirtualMethods(className)) {
+                m_output << "    this->vtable = &" << className << "_vtable;\n";
+            }
+
+            m_output << "}\n\n";
+            m_symbolTable->currentFunc = nullptr;
+        }
+
+        auto methods = m_typeSystem->getClassMethods(className);
+        for (const auto& method : methods) {
+            m_symbolTable->currentFunc = method;
+            m_output << m_codeGen->generateFunctionDecl(method);
+
+            if (method->isVirtual) {
+                m_output << " {\n    struct " << className << "* this = (struct " << className << "*)this_param;\n";
+                m_output << "}\n\n";
+            }
+            else {
+                m_output << " {\n}\n\n";
+            }
+            m_symbolTable->currentFunc = nullptr;
+        }
+    }
 }

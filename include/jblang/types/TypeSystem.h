@@ -71,6 +71,8 @@ public:
     void setParentClass(std::string parent) { m_parentClass = std::move(parent); }
     const std::string& getParentClass() const noexcept { return m_parentClass; }
     bool hasParent() const noexcept { return !m_parentClass.empty(); }
+    void setHasVirtualMethods(bool hasVirtual) noexcept { m_hasVirtualMethods = hasVirtual; }
+    bool hasVirtualMethods() const noexcept { return m_hasVirtualMethods; }
 
     const std::vector<int>& getArraySizes() const noexcept
     {
@@ -84,13 +86,14 @@ private:
     bool m_isConst;
     std::string m_structName;
     std::string m_parentClass;
+    bool m_hasVirtualMethods = false;
     std::vector<std::pair<std::string, Type>> m_structMembers;
 };
 
 class Function {
 public:
     Function() noexcept
-            :returnType(Type::BaseType::Void), isStatic(false), block(nullptr) { }
+            :returnType(Type::BaseType::Void), isStatic(false), isVirtual(false), block(nullptr) { }
 
     Function(const Function& other) = default;
     Function(Function&& other) noexcept = default;
@@ -104,6 +107,7 @@ public:
     std::vector<std::pair<std::string, Type>> params;
     Type returnType;
     bool isStatic;
+    bool isVirtual;
 };
 
 class TypeSystem {
@@ -132,6 +136,12 @@ public:
     void registerClassConstructor(const std::string& className, std::shared_ptr<Function> constructor);
     std::shared_ptr<Function> getClassConstructor(const std::string& className) const;
     std::vector<std::shared_ptr<Function>> getClassMethods(const std::string& className) const;
+    std::vector<std::shared_ptr<Function>> getVirtualMethods(const std::string& className) const;
+    bool hasVirtualMethods(const std::string& className) const;
+    std::vector<std::shared_ptr<Function>> getAllVirtualMethods(const std::string& className) const;
+    std::string generateVTableStruct() const;
+    std::string generateVTableInstance(const std::string& className) const;
+    std::string findMethodImplementation(const std::string& className, const std::string& methodName) const;
     void registerTypeDef(const std::string& name, Type type);
     void registerFunction(std::shared_ptr<Function> func);
 
@@ -149,6 +159,14 @@ public:
 
     bool isCompatible(const Type& from, const Type& to) const noexcept
     {
+        if (from.toString()==to.toString()) return true;
+
+        // Pointer casting: Child* -> Parent*
+        if (from.isPointer() && to.isPointer() &&
+                from.isClass() && to.isClass()) {
+            return isSubclassOf(from.getClassName(), to.getClassName());
+        }
+
         return false;
     }
 

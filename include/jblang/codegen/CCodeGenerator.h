@@ -24,6 +24,7 @@ public:
     std::string generateIncRef(const Variable& var, const std::string& other = "NULL") override;
     std::string generateDecRef(const Variable& var) override;
     std::string generateAlloc(const Type& type) override;
+    std::string generateCast(const std::string& expr, const Type& fromType, const Type& toType) override;
 
 private:
     const bool m_useRefCounts;
