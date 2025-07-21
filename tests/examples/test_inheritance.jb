@@ -8,7 +8,7 @@ class Animal {
         this->age = a;
     }
 
-    void speak()
+    virtual void speak()
     {
         printf("Animal sound\n");
     }

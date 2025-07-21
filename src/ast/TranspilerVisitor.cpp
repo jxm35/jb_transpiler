@@ -6,11 +6,12 @@
 antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
 {
     m_output << "#include \"runtime.h\"\n";
-
     for (auto stmt : ctx->preprocessorDirective()) {
         visit(stmt);
         m_output << "\n";
     }
+
+    m_first_pass = true;
 
     for (auto stmt : ctx->statement()) {
         visit(stmt);
@@ -21,8 +22,18 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
 
     for (const auto& className : m_classNames) {
         if (m_typeSystem->hasVirtualMethods(className)) {
+            for (auto func : m_typeSystem->getAllVirtualMethods(className)) {
+                m_output << func->getSignature() << ";\n";
+            }
+            m_output << "\n";
             m_output << m_typeSystem->generateVTableInstance(className);
         }
+    }
+
+    m_first_pass = false;
+    for (auto stmt : ctx->statement()) {
+        visit(stmt);
+        m_output << "\n";
     }
 
 //    generateClassMethodBodies();
@@ -81,10 +92,14 @@ antlrcpp::Any TranspilerVisitor::visitFunctionDecl(JBLangParser::FunctionDeclCon
     func->returnType = ctx->typeSpec() ? resolveTypeFromContext(ctx->typeSpec()) : Type(
             Type::BaseType::Void);
 
-    m_typeSystem->registerFunction(func);
+    if (m_first_pass) {
+        m_typeSystem->registerFunction(func);
+    }
     m_symbolTable->currentFunc = func;
-    m_output << m_codeGen->generateFunctionDecl(func);
-    visit(ctx->block());
+    if (!m_first_pass) {
+        m_output << m_codeGen->generateFunctionDecl(func);
+        visit(ctx->block());
+    }
     m_symbolTable->currentFunc = nullptr;
 
     return nullptr;
@@ -104,27 +119,29 @@ antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext* ctx)
             varName = ctx->IDENTIFIER()->getText();
             varType = resolveTypeFromContext(ctx->typeSpec());
         }
-        if (m_symbolTable->isGlobalScope() && varType.isPointer()) {
+        if (m_symbolTable->isGlobalScope() && varType.isPointer() && m_first_pass) {
             m_symbolTable->globalVars.emplace_back(varName, varType);
         }
-        if (ctx->expression()) {
-            auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
+        if (!m_first_pass) {
+            if (ctx->expression()) {
+                auto initExpr = std::any_cast<std::string>(visit(ctx->expression()));
 
-            Variable initVar;
-            if (m_symbolTable->lookupSymbol(initExpr, initVar)) {
-                if (m_typeSystem->isCompatible(initVar.type, varType)) {
-                    initExpr = m_codeGen->generateCast(initExpr, initVar.type, varType);
+                Variable initVar;
+                if (m_symbolTable->lookupSymbol(initExpr, initVar)) {
+                    if (m_typeSystem->isCompatible(initVar.type, varType)) {
+                        initExpr = m_codeGen->generateCast(initExpr, initVar.type, varType);
+                    }
                 }
+                Variable assignedFrom;
+                bool found = m_symbolTable->lookupSymbol(initExpr, assignedFrom);
+                if (found && assignedFrom.type.isPointer()) {
+                    m_output << indentLevel << m_codeGen->generateIncRef(assignedFrom);
+                }
+                m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType, " = "+initExpr);
             }
-            Variable assignedFrom;
-            bool found = m_symbolTable->lookupSymbol(initExpr, assignedFrom);
-            if (found && assignedFrom.type.isPointer()) {
-                m_output << indentLevel << m_codeGen->generateIncRef(assignedFrom);
+            else {
+                m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType);
             }
-            m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType, " = "+initExpr);
-        }
-        else {
-            m_output << indentLevel << m_codeGen->generateVarDecl(varName, varType);
         }
         m_symbolTable->addSymbol(varName, varType);
 
@@ -138,7 +155,9 @@ antlrcpp::Any TranspilerVisitor::visitVarDecl(JBLangParser::VarDeclContext* ctx)
 antlrcpp::Any TranspilerVisitor::visitBlock(JBLangParser::BlockContext* ctx)
 {
     m_symbolTable->enterScope();
-    m_output << m_codeGen->generateScopeEntry();
+    if (!m_first_pass) {
+        m_output << m_codeGen->generateScopeEntry();
+    }
 
     std::string indentLevel = m_symbolTable->getIndentLevel();
 
@@ -146,31 +165,24 @@ antlrcpp::Any TranspilerVisitor::visitBlock(JBLangParser::BlockContext* ctx)
         visit(stmt);
     }
 
-    for (const auto& var : m_symbolTable->getCurrentScopeSymbols()) {
-        if (var.second.type.isPointer()) {
-            m_output << indentLevel << m_codeGen->generateDecRef(var.second);
+    if (!m_first_pass) {
+        for (const auto& var : m_symbolTable->getCurrentScopeSymbols()) {
+            if (var.second.type.isPointer()) {
+                m_output << indentLevel << m_codeGen->generateDecRef(var.second);
+            }
         }
     }
 
     m_symbolTable->exitScope();
-    m_output << indentLevel << m_codeGen->generateScopeExit(m_symbolTable->getCurrentScopeSymbols());
+    if (!m_first_pass) {
+        m_output << indentLevel << m_codeGen->generateScopeExit(m_symbolTable->getCurrentScopeSymbols());
+    }
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitSpawnStmt(JBLangParser::SpawnStmtContext* ctx)
 {
-    auto* funcCallCtx = dynamic_cast<JBLangParser::FuncCallExprContext*>(ctx->expression());
-    if (!funcCallCtx) {
-        throw std::runtime_error("Can only spawn function calls");
-    }
-
-    auto* funcCall = funcCallCtx->functionCall();
-    std::string funcName = funcCall->IDENTIFIER()->getText();
-
-    std::string wrapperName = funcName+"_wrapper_"+std::to_string(m_tempVarCounter++);
-//    generateSpawnWrapper(wrapperName, funcCall, func);
-
-    m_output << m_symbolTable->getIndentLevel() << "runtime_spawn(" << wrapperName << ", NULL);\n";
+    // TODO
     return nullptr;
 }
 
@@ -181,29 +193,37 @@ antlrcpp::Any TranspilerVisitor::visitReturnStmt(JBLangParser::ReturnStmtContext
     auto returnExpr = std::any_cast<std::string>(visit(ctx->expression()));
     this->addRefCounts = true;
     bool found = m_symbolTable->lookupSymbol(returnExpr, returnedVariable);
-    if (found && returnedVariable.type.isPointer()) {
+    if (found && returnedVariable.type.isPointer() && !m_first_pass) {
         m_output << m_symbolTable->getIndentLevel() << m_codeGen->generateIncRef(returnedVariable);
     }
 
     std::string indentLevel = m_symbolTable->getIndentLevel();
     for (const auto& var : m_symbolTable->getCurrentScopeSymbols()) {
-        if (var.second.type.isPointer()) {
+        if (var.second.type.isPointer() && !m_first_pass) {
             m_output << indentLevel << m_codeGen->generateDecRef(var.second);
         }
     }
 
-    m_output << indentLevel << m_codeGen->generateReturn(returnExpr, Type(Type::BaseType::NO_TYPE));
+    if (!m_first_pass) {
+        m_output << indentLevel << m_codeGen->generateReturn(returnExpr, Type(Type::BaseType::NO_TYPE));
+    }
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitExprStmt(JBLangParser::ExprStmtContext* ctx)
 {
-    m_output << m_symbolTable->getIndentLevel() << std::any_cast<std::string>(visit(ctx->expression())) << ";\n";
+    std::string output = std::any_cast<std::string>(visit(ctx->expression()));
+    if (!m_first_pass) {
+        m_output << m_symbolTable->getIndentLevel() << output << ";\n";
+    }
     return nullptr;
 }
 
 antlrcpp::Any TranspilerVisitor::visitForStmt(JBLangParser::ForStmtContext* ctx)
 {
+    if (!m_first_pass) {
+        return nullptr;
+    }
     std::string indentLevel = m_symbolTable->getIndentLevel();
 
     m_output << indentLevel << "for (";
@@ -313,6 +333,9 @@ antlrcpp::Any TranspilerVisitor::visitCompareExpr(JBLangParser::CompareExprConte
 
 antlrcpp::Any TranspilerVisitor::visitAssignExpr(JBLangParser::AssignExprContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     auto left = std::any_cast<std::string>(visit(ctx->expression(0)));
     auto right = std::any_cast<std::string>(visit(ctx->expression(1)));
 
@@ -359,6 +382,9 @@ antlrcpp::Any TranspilerVisitor::visitLiteral(JBLangParser::LiteralContext* ctx)
 
 antlrcpp::Any TranspilerVisitor::visitFunctionCall(JBLangParser::FunctionCallContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     std::vector<std::string> args;
     std::string code = "";
     std::string indentLevel = m_symbolTable->getIndentLevel();
@@ -447,7 +473,9 @@ antlrcpp::Any TranspilerVisitor::visitPreprocessorDirective(JBLangParser::Prepro
 Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext* ctx)
 {
     std::string structName = ctx->IDENTIFIER()->getText();
-    m_typeSystem->registerStruct(structName);
+    if (m_first_pass) {
+        m_typeSystem->registerStruct(structName);
+    }
 
     std::vector<std::pair<std::string, Type>> members;
 
@@ -469,15 +497,18 @@ Type TranspilerVisitor::getStructFromCode(JBLangParser::StructDeclContext* ctx)
 antlrcpp::Any TranspilerVisitor::visitStructDecl(JBLangParser::StructDeclContext* ctx)
 {
     Type structType = getStructFromCode(ctx);
-
-    m_output << m_codeGen->generateStructDecl(structType.getStructName(), structType);
+    if (!m_first_pass) {
+        m_output << m_codeGen->generateStructDecl(structType.getStructName(), structType);
+    }
     return nullptr;
 }
 
 Type TranspilerVisitor::getClassFromCode(JBLangParser::ClassDeclContext* ctx)
 {
     std::string className = ctx->IDENTIFIER(0)->getText();
-    m_typeSystem->registerClass(className);
+    if (m_first_pass) {
+        m_typeSystem->registerClass(className);
+    }
 
     if (ctx->IDENTIFIER().size()>1) {
         std::string parentName = ctx->IDENTIFIER(1)->getText();
@@ -501,18 +532,10 @@ Type TranspilerVisitor::getClassFromCode(JBLangParser::ClassDeclContext* ctx)
     return m_typeSystem->setClassMembers(className, fields);
 }
 
-void TranspilerVisitor::processClassInheritance(JBLangParser::ClassDeclContext* ctx, const std::string& className)
-{
-    if (ctx->IDENTIFIER().size()>1) {
-        std::string parentName = ctx->IDENTIFIER(1)->getText();
-        m_typeSystem->setClassParent(className, parentName);
-    }
-}
-
 std::string TranspilerVisitor::generateParentConstructorCall(JBLangParser::ClassConstructorContext* ctx,
         const std::string& className)
 {
-    if (ctx->IDENTIFIER().size()>1) {
+    if (!m_first_pass && ctx->IDENTIFIER().size()>1) {
         std::string parentName = ctx->IDENTIFIER(1)->getText();
         std::string parentConstructor = parentName+"_"+parentName;
 
@@ -550,19 +573,23 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
 {
     Type classType = getClassFromCode(ctx);
     std::string className = ctx->IDENTIFIER(0)->getText();
-    m_classNames.push_back(className);
-    m_output << "struct " << className << " {\n";
+    if (m_first_pass) {
+        m_classNames.push_back(className);
+    }
+    else {
+        m_output << "struct " << className << " {\n";
 
-    if (classType.hasParent()) {
-        m_output << "    struct " << classType.getParentClass() << " parent;\n";
+        if (classType.hasParent()) {
+            m_output << "    struct " << classType.getParentClass() << " parent;\n";
+        }
+        else if (m_typeSystem->hasVirtualMethods(className)) {
+            m_output << "    struct vtable* vtable;\n";
+        }
+        for (const auto& member : classType.getStructMembers()) {
+            m_output << "    " << member.second.toString() << " " << member.first << ";\n";
+        }
+        m_output << "};\n\n";
     }
-    else if (false) { // hasVirtuals
-        m_output << "    struct vtable* vtable;\n";
-    }
-    for (const auto& member : classType.getStructMembers()) {
-        m_output << "    " << member.second.toString() << " " << member.first << ";\n";
-    }
-    m_output << "};\n\n";
 
     for (auto member : ctx->classMember()) {
         if (auto constructorCtx = dynamic_cast<JBLangParser::ClassConstructorContext*>(member)) {
@@ -590,17 +617,23 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
                 }
             }
 
-            m_typeSystem->registerClassConstructor(className, constructor);
-            m_symbolTable->currentFunc = constructor;
-            m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
-
-            if (m_typeSystem->hasVirtualMethods(className)) {
-                m_output << "    this->vtable = &" << className << "_vtable;\n";
+            if (m_first_pass) {
+                m_typeSystem->registerClassConstructor(className, constructor);
             }
+            m_symbolTable->currentFunc = constructor;
+            if (!m_first_pass) {
+                m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
 
-            m_output << generateParentConstructorCall(constructorCtx, className);
+                if (m_typeSystem->hasVirtualMethods(className)) {
+                    m_output << "    this->vtable = &" << className << "_vtable;\n";
+                }
+
+                m_output << generateParentConstructorCall(constructorCtx, className);
+            }
             visit(constructorCtx->block());
-            m_output << "}\n\n";
+            if (!m_first_pass) {
+                m_output << "}\n\n";
+            }
             m_symbolTable->currentFunc = nullptr;
         }
         else if (auto methodCtx = dynamic_cast<JBLangParser::ClassMethodContext*>(member)) {
@@ -630,13 +663,19 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
                 }
             }
 
-            m_typeSystem->registerClassMethod(className, method);
+            if (m_first_pass) {
+                m_typeSystem->registerClassMethod(className, method);
+            }
             m_symbolTable->currentFunc = method;
-            m_output << m_codeGen->generateFunctionDecl(method);
+            if (!m_first_pass) {
+                m_output << m_codeGen->generateFunctionDecl(method);
+            }
             if (method->isVirtual) {
-                m_output << " {\n    struct " << className << "* this = (struct " << className << "*)this_param;\n";
-                visit(methodCtx->block());
-                m_output << "}\n\n";
+                if (!m_first_pass) {
+                    m_output << " {\n    struct " << className << "* this = (struct " << className << "*)this_param;\n";
+                    visit(methodCtx->block());
+                    m_output << "}\n\n";
+                }
             }
             else {
                 visit(methodCtx->block());
@@ -672,6 +711,9 @@ antlrcpp::Any TranspilerVisitor::visitClassConstructor(JBLangParser::ClassConstr
 
 antlrcpp::Any TranspilerVisitor::visitNewWithConstructorExpr(JBLangParser::NewWithConstructorExprContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     std::string className = ctx->IDENTIFIER()->getText();
 
     auto constructor = m_typeSystem->getClassConstructor(className);
@@ -704,6 +746,9 @@ antlrcpp::Any TranspilerVisitor::visitNewWithConstructorExpr(JBLangParser::NewWi
 
 antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExprContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     auto objExpr = std::any_cast<std::string>(visit(ctx->expression()));
     std::string methodName = ctx->IDENTIFIER()->getText();
 
@@ -789,6 +834,9 @@ antlrcpp::Any TranspilerVisitor::visitClassMethod(JBLangParser::ClassMethodConte
 
 antlrcpp::Any TranspilerVisitor::visitIfStmt(JBLangParser::IfStmtContext* ctx)
 {
+    if (m_first_pass) {
+        return nullptr;
+    }
     this->addRefCounts = false;
     m_output << m_symbolTable->getIndentLevel() << "if (" << std::any_cast<std::string>(visit(ctx->expression()))
              << ") {\n";
@@ -808,6 +856,9 @@ antlrcpp::Any TranspilerVisitor::visitIfStmt(JBLangParser::IfStmtContext* ctx)
 
 antlrcpp::Any TranspilerVisitor::visitWhileStmt(JBLangParser::WhileStmtContext* ctx)
 {
+    if (m_first_pass) {
+        return nullptr;
+    }
     this->addRefCounts = false;
     m_output << m_symbolTable->getIndentLevel() << "while (" << std::any_cast<std::string>(visit(ctx->expression()))
              << ") {\n";
@@ -819,6 +870,9 @@ antlrcpp::Any TranspilerVisitor::visitWhileStmt(JBLangParser::WhileStmtContext* 
 
 antlrcpp::Any TranspilerVisitor::visitPointerMemberExpr(JBLangParser::PointerMemberExprContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     auto base = std::any_cast<std::string>(visit(ctx->expression()));
     if (base=="this" && m_symbolTable->currentFunc) {
         std::string funcName = m_symbolTable->currentFunc->name;
@@ -878,8 +932,12 @@ antlrcpp::Any TranspilerVisitor::visitTypedefDecl(JBLangParser::TypedefDeclConte
 {
     Type type = ctx->structDecl() ? getStructFromCode(ctx->structDecl()) : resolveTypeFromContext(
             ctx->typeSpec());
-    m_typeSystem->registerTypeDef(ctx->IDENTIFIER()->getText(), type);
-    m_output << m_codeGen->generateTypeDef(ctx->IDENTIFIER()->getText(), type);
+    if (m_first_pass) {
+        m_typeSystem->registerTypeDef(ctx->IDENTIFIER()->getText(), type);
+    }
+    else {
+        m_output << m_codeGen->generateTypeDef(ctx->IDENTIFIER()->getText(), type);
+    }
 
     return nullptr;
 }
@@ -898,6 +956,9 @@ antlrcpp::Any TranspilerVisitor::visitNewExpr(JBLangParser::NewExprContext* ctx)
 
 antlrcpp::Any TranspilerVisitor::visitArrayDecl(JBLangParser::ArrayDeclContext* ctx)
 {
+    if (m_first_pass) {
+        return nullptr;
+    }
     Type type = getArrayFromCode(ctx);
     m_output << type.toString();
     return nullptr;
@@ -937,6 +998,9 @@ antlrcpp::Any TranspilerVisitor::visitPreDecrementExpr(JBLangParser::PreDecremen
 
 antlrcpp::Any TranspilerVisitor::visitInitializerList(JBLangParser::InitializerListContext* ctx)
 {
+    if (m_first_pass) {
+        return std::string();
+    }
     std::string code;
     Variable assignedFrom;
     std::string indentLevel = m_symbolTable->getIndentLevel();
