@@ -20,12 +20,36 @@ antlrcpp::Any TranspilerVisitor::visitProgram(JBLangParser::ProgramContext* ctx)
 
     m_output << m_typeSystem->generateVTableStruct();
 
+    std::set<std::string>declaredMethods;
     for (const auto& className : m_classNames) {
-        if (m_typeSystem->hasVirtualMethods(className)) {
-            for (auto func : m_typeSystem->getAllVirtualMethods(className)) {
-                m_output << func->getSignature() << ";\n";
+        std::cout << "DEBUG: Processing class " << className << std::endl;
+
+        auto allVirtuals = m_typeSystem->getAllVirtualMethods(className);
+        std::cout << "DEBUG: getAllVirtualMethods returned " << allVirtuals.size() << " methods" << std::endl;
+        for (auto func : allVirtuals) {
+            std::cout << "DEBUG: Virtual method: " << func->name << std::endl;
+            if (declaredMethods.find(func->name)==declaredMethods.end()) {
+                m_output << m_codeGen->generateFunctionDecl(func) << ";\n";
+                declaredMethods.insert(func->name);
             }
-            m_output << "\n";
+        }
+
+        auto classMethods = m_typeSystem->getClassMethods(className);
+        std::cout << "DEBUG: getClassMethods returned " << classMethods.size() << " methods for " << className
+                  << std::endl;
+        for (auto method : classMethods) {
+            std::cout << "DEBUG: Class method: " << method->name << " isVirtual=" << method->isVirtual << std::endl;
+            if (method->isVirtual && declaredMethods.find(method->name)==declaredMethods.end()) {
+                m_output << m_codeGen->generateFunctionDecl(method) << ";\n";
+                declaredMethods.insert(method->name);
+            }
+        }
+    }
+    m_output << "\n";
+
+    for (const auto& className : m_classNames) {
+        auto allVirtuals = m_typeSystem->getAllVirtualMethods(className);
+        if (!allVirtuals.empty()) {
             m_output << m_typeSystem->generateVTableInstance(className);
         }
     }
@@ -623,12 +647,18 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
             m_symbolTable->currentFunc = constructor;
             if (!m_first_pass) {
                 m_output << m_codeGen->generateFunctionDecl(constructor) << " {\n";
+                m_output << generateParentConstructorCall(constructorCtx, className);
 
-                if (m_typeSystem->hasVirtualMethods(className)) {
-                    m_output << "    this->vtable = &" << className << "_vtable;\n";
+                auto allVirtuals = m_typeSystem->getAllVirtualMethods(className);
+                if (!allVirtuals.empty()) {
+                    if (classType.hasParent()) {
+                        m_output << "    (this->parent).vtable = &" << className << "_vtable;\n";
+                    }
+                    else {
+                        m_output << "    this->vtable = &" << className << "_vtable;\n";
+                    }
                 }
 
-                m_output << generateParentConstructorCall(constructorCtx, className);
             }
             visit(constructorCtx->block());
             if (!m_first_pass) {
@@ -642,6 +672,19 @@ antlrcpp::Any TranspilerVisitor::visitClassDecl(JBLangParser::ClassDeclContext* 
             method->returnType = resolveTypeFromContext(methodCtx->typeSpec());
             std::string methodText = methodCtx->getText();
             method->isVirtual = methodText.find("virtual")!=std::string::npos;
+
+            // Check if this method overrides a virtual method from parent
+            if (!method->isVirtual && classType.hasParent()) {
+                std::string methodBaseName = methodCtx->IDENTIFIER()->getText();
+                auto parentVirtuals = m_typeSystem->getAllVirtualMethods(classType.getParentClass());
+                for (const auto& parentMethod : parentVirtuals) {
+                    std::string parentBaseName = parentMethod->name.substr(parentMethod->name.find('_')+1);
+                    if (parentBaseName==methodBaseName) {
+                        method->isVirtual = true;
+                        break;
+                    }
+                }
+            }
 
             Type thisType = classType;
             thisType.setPointer(true);
@@ -797,7 +840,16 @@ antlrcpp::Any TranspilerVisitor::visitMethodCallExpr(JBLangParser::MethodCallExp
             }
         }
 
-        std::string call = objExpr+"->vtable->"+methodName+"("+objExpr;
+        auto classType = m_typeSystem->resolveType(className);
+        std::string vtableAccess;
+        if (classType.hasParent()) {
+            vtableAccess = objExpr+"->parent.vtable";
+        }
+        else {
+            vtableAccess = objExpr+"->vtable";
+        }
+
+        std::string call = vtableAccess+"->"+methodName+"("+objExpr;
         for (size_t i = 1; i<args.size(); ++i) {
             call += ", "+args[i];
         }

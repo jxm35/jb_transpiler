@@ -15,7 +15,7 @@ std::string CCodeGenerator::generateFunctionDecl(const std::shared_ptr<Function>
     if (!func) {
         throw std::runtime_error("Cannot generate declaration for null function");
     }
-    if (func->isVirtual && !func->params.empty()) {
+    if (func->isVirtual) {
         std::string signature = func->returnType.toString()+" "+func->name+"(void* this_param";
         for (size_t i = 1; i<func->params.size(); ++i) {
             signature += ", "+func->params[i].second.toString()+" "+func->params[i].first;
