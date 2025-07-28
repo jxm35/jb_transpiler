@@ -8,3 +8,8 @@ obj
 output
 output.c
 a.out
+test_output
+test_output.c
+tests/cram/*.err
+.vscode
+.idea

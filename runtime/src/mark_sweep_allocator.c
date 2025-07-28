@@ -101,9 +101,9 @@ static void conservative_scan_stack(void)
 
     void** stack_top = (void**) __builtin_frame_address(0);
 
-#ifdef DEBUG
-    printf("(debug) Scanning stack from %p to %p\n", stack_top, bottom);
-#endif
+// #ifdef DEBUG
+//     printf("(debug) Scanning stack from %p to %p\n", stack_top, bottom);
+// #endif
 
     if (stack_top<bottom) {
         for (void** p = stack_top; p<bottom; ++p) {
@@ -201,7 +201,7 @@ static void* ms_alloc(size_t size)
         stats.peak_bytes = stats.current_bytes;
 
 #ifdef DEBUG
-    printf("(debug) Allocated %zu bytes at %p\n", size, (void*)(header + 1));
+    printf("(debug) Allocated %zu bytes\n", size);
 #endif
 
     if (stats.current_bytes>GC_THRESHOLD) {
@@ -252,7 +252,7 @@ static void ms_shutdown(void)
     while (allocation_list) {
         MSHeader* next = allocation_list->next;
 #ifdef DEBUG
-        printf("(debug) Shutdown freeing %p\n", next);
+        printf("(debug) Shutdown freeing %zu bytes\n", allocation_list->size);
 #endif
         free(allocation_list);
         allocation_list = next;

@@ -1,0 +1,102 @@
+(debug) Mark-sweep allocator initialized
+(debug) Initialized runtime with Mark-Sweep GC
+Mark-Sweep Garbage Collector Test Program
+=========================================
+=== Basic Collection Test ===
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+Created temporary chain: 100 -> 200 -> 300
+(debug) Allocated 24 bytes
+Created keeper node: 999
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 0 objects (0 bytes)
+(debug) GC complete: 224 -> 224 bytes
+Chain still exists chain: 100 -> 200 -> 300
+Temporary chain made unreachable
+Keeper still accessible: 999
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 3 objects (168 bytes)
+(debug) GC complete: 224 -> 56 bytes
+Garbage collection completed
+
+=== Reachable Cycle Test ===
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+Created cycle: 1 -> 2 -> 3 -> (back to 1)
+Cycle root value: 1
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 0 objects (0 bytes)
+(debug) GC complete: 224 -> 224 bytes
+GC run - cycle should remain (still reachable)
+Cycle still accessible via a: 1
+Broke reference to cycle
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 3 objects (168 bytes)
+(debug) GC complete: 224 -> 56 bytes
+GC run - cycle should be collected now
+
+=== Partial Structure Collection Test ===
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+Built tree: root(1) -> branch1(2) -> leaf1(4)
+           root(1) -> branch2(3) -> leaf2(5)
+Cut off branch2 subtree
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 3 objects (168 bytes)
+(debug) GC complete: 336 -> 168 bytes
+GC should collect branch2(2) and leaf2(5)
+Root and branch1 subtree still reachable: 1 -> 2 -> 4
+
+=== GC Threshold Test ===
+Set GC threshold to 1KB
+(debug) Allocated 24 bytes
+Created keeper: 42
+Allocated and abandoned 50 temporary nodes
+Keeper should still be alive: 42
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 3 objects (168 bytes)
+(debug) GC complete: 224 -> 56 bytes
+Final GC completed
+(debug) Allocated 24 bytes
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 1 objects (56 bytes)
+(debug) GC complete: 112 -> 56 bytes
+Global node has not been collected: 99
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 1 objects (56 bytes)
+(debug) GC complete: 56 -> 0 bytes
+
+=== All Tests Complete ===
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 0 objects (0 bytes)
+(debug) GC complete: 0 -> 0 bytes
+
+
+Runtime Stats (Mark-Sweep GC)
+Total allocs: 14
+Total collections: 14
+Current bytes: 0
+Peak bytes: 336

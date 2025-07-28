@@ -1,0 +1,14 @@
+(debug) Initialized runtime with Reference-Count GC
+(debug) inc 2
+(debug) inc 3
+(debug) dec 2
+data: 5
+(debug) dec 1
+(debug) dec 0
+
+
+Runtime Stats (Reference-Count GC)
+Total allocs: 1
+Total collections: 1
+Current bytes: 0
+Peak bytes: 52

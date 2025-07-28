@@ -1,0 +1,19 @@
+(debug) Mark-sweep allocator initialized
+(debug) Initialized runtime with Mark-Sweep GC
+(debug) Allocated 8 bytes
+Point(3, 4)
+Distance squared: 25
+Point(4, 5)
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 0 objects (0 bytes)
+(debug) GC complete: 40 -> 40 bytes
+(debug) Shutdown freeing 40 bytes
+
+
+Runtime Stats (Mark-Sweep GC)
+Total allocs: 1
+Total collections: 0
+Current bytes: 40
+Peak bytes: 40

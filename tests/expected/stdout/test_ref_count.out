@@ -1,0 +1,61 @@
+(debug) Initialized runtime with Reference-Count GC
+Reference Counting Test Program
+===============================
+=== Basic Pointer Sharing Test ===
+(debug) inc 2
+(debug) dec 1
+(debug) inc 2
+(debug) inc 3
+Shared node value: 42
+Ref1 value: 42
+Ref2 value: 42
+(debug) dec 2
+(debug) inc 2
+(debug) dec 1
+After reassignment, ref1 value: 100
+Shared still: 42
+(debug) dec 0
+(debug) dec 1
+(debug) dec 0
+
+=== Nested Structure Test ===
+(debug) inc 2
+(debug) dec 1
+(debug) inc 2
+(debug) dec 1
+(debug) inc 2
+Parent: 1, Child: 2
+(debug) inc 2
+(debug) dec 1
+(debug) inc 3
+Parent2: 3, Shared child: 2
+After nullifying parent->child, parent2 child still: 2
+(debug) dec 2
+(debug) dec 0
+(debug) dec 1
+(debug) dec 0
+(debug) dec 0
+
+=== Container Pattern Test ===
+(debug) inc 2
+(debug) dec 1
+(debug) inc 2
+(debug) inc 3
+Primary: 999, Backup: 999
+After removing primary, backup still: 999
+(debug) inc 2
+(debug) dec 1
+New primary: 777, Backup: 999
+(debug) dec 0
+(debug) dec 2
+(debug) dec 1
+(debug) dec 0
+
+=== Test Complete ===
+
+
+Runtime Stats (Reference-Count GC)
+Total allocs: 8
+Total collections: 7
+Current bytes: 64
+Peak bytes: 192

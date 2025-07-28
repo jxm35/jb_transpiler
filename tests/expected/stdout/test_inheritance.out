@@ -1,0 +1,41 @@
+(debug) Mark-sweep allocator initialized
+(debug) Initialized runtime with Mark-Sweep GC
+=== Animal Inheritance Test ===
+(debug) Allocated 24 bytes
+(debug) Allocated 24 bytes
+
+--- Dog Tests ---
+Woof! I'm 3 years old
+Sleeping for 1 hours
+Wagging tail happily
+Dog age: 3
+Dog breed: 42
+
+--- Cat Tests ---
+Meow! I have 9 lives left
+Sleeping for 1 hours
+Purring contentedly
+Cat age: 2
+
+--- Parent Method Calls ---
+(debug) Allocated 16 bytes
+Animal sound
+Sleeping for 2 hours
+Animal age: 5
+
+--- Non virtual method call on upcast ---
+Woof! I'm 3 years old
+(debug) Starting garbage collection
+(debug) Starting conservative mark phase
+(debug) Starting sweep phase
+(debug) Freed 1 objects (56 bytes)
+(debug) GC complete: 160 -> 104 bytes
+(debug) Shutdown freeing 48 bytes
+(debug) Shutdown freeing 56 bytes
+
+
+Runtime Stats (Mark-Sweep GC)
+Total allocs: 3
+Total collections: 1
+Current bytes: 104
+Peak bytes: 160
